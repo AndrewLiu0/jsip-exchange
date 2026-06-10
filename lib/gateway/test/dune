@@ -1,0 +1,13 @@
+(library
+ (name jsip_gateway_test)
+ (libraries
+  bin_prot
+  jsip_types
+  jsip_order_book
+  jsip_gateway
+  jsip_test_harness
+  async
+  core)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane)))
