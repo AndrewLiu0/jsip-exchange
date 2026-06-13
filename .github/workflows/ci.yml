@@ -50,3 +50,33 @@ jobs:
       # reformats in place.
       - name: Check formatting
         run: eval $(opam env) && dune build @fmt
+
+  # Informational only: runs the order book benchmark and publishes the table
+  # to the run's Summary page. Runs in parallel with build-and-test and is
+  # marked continue-on-error so noisy/failed benchmarks never block CI.
+  benchmark:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/jane-street-immersion-program/jsip-exchange-ci:latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Run order book benchmark
+        continue-on-error: true
+        run: |
+          eval $(opam env)
+          dune build lib/order_book/bench/bench_order_book.exe
+          {
+            echo '## Order book benchmark'
+            echo
+            echo 'Core_bench, ~1s per test. **Note:** GitHub-hosted runners are'
+            echo 'shared and noisy, so treat these as indicative, not precise.'
+            echo 'For stable numbers run locally with a higher quota -- see the'
+            echo 'header of lib/order_book/bench/bench_order_book.ml.'
+            echo
+            echo '```'
+            ./_build/default/lib/order_book/bench/bench_order_book.exe -ascii -quota 1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

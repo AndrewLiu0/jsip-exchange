@@ -296,5 +296,8 @@ let () =
         [ bench_find_match_alloc ~n:100 ]
       ]
   in
-  Bench.bench tests
+  (* [make_command] (rather than [Bench.bench]) wires up Core_bench's full
+     command line, so the [-ascii], [-quota], and name-filter flags
+     documented above actually take effect. *)
+  Command_unix.run (Bench.make_command tests)
 ;;
