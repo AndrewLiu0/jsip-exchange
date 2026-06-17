@@ -110,7 +110,7 @@ is broken" demonstrates this bug.
 
 ---
 
-## Exercise 3: Add symbol validation
+## _Exercise 3: Add symbol validation_ [OPTIONAL]
 
 `Symbol.of_string` currently accepts any non-empty string. Add validation
 that the symbol contains only uppercase alphanumeric characters.
@@ -137,7 +137,7 @@ invalid symbols (special characters, empty), and your lowercase decision.
 
 ---
 
-## Exercise 4: Participant-view fills
+## _Exercise 4: Participant-view fills_ [OPTIONAL]
 
 Add `to_participant_view : t -> Participant.t -> string option` to the `Fill` module.
 
@@ -163,7 +163,7 @@ client starts subscribing to its session feed.
 
 ---
 
-## Exercise 5: End-of-day processing
+## _Exercise 5: End-of-day processing_ [OPTIONAL]
 
 Add a function that cancels all resting Day orders and emits
 `Order_cancel` events with `End_of_day` reason.
@@ -188,7 +188,7 @@ Add a function that cancels all resting Day orders and emits
 
 ---
 
-## Exercise 6: Add Good-till-Cancel orders
+## _Exercise 6: Add Good-till-Cancel orders_ [OPTIONAL]
 
 Add `Good_till_cancel` to `Time_in_force.t`. GTC orders rest on the book
 like Day orders, but are not cancelled at end of day. This requires:
@@ -209,7 +209,7 @@ for matching. The only difference is in end-of-day processing.
 
 ---
 
-## Exercise 7: Add Fill-or-Kill orders
+## _Exercise 7: Add Fill-or-Kill orders_ [OPTIONAL]
 
 Add `Fill_or_kill` to `Time_in_force.t` and
 `Fill_or_kill_not_fully_fillable` to `Cancel_reason.t`. Update
@@ -388,7 +388,7 @@ Add new tests for:
 
 ---
 
-## Exercise 9: Self-trade prevention
+## _Exercise 9: Self-trade prevention_ [OPTIONAL]
 
 When a participant's incoming order would match against their own resting
 order, the exchange should prevent the trade. This avoids misleading
