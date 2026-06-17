@@ -25,7 +25,9 @@ end
 
 (** A live order on the exchange, with an ID assigned by the matching engine
     and mutable remaining size. *)
-type t [@@deriving sexp_of, equal, compare]
+type t [@@deriving_inline sexp_of, equal, compare]
+
+[@@@end]
 
 val to_string : t -> string
 
