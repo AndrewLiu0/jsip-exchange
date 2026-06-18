@@ -15,6 +15,7 @@ let%expect_test "to_float: converts cents to dollars" =
   [%test_result: float] (Price.to_float (Price.of_int_cents 0)) ~expect:0.0
 ;;
 
+(* assert based tests *)
 let%expect_test "of_float_exn: converts dollar amount to cents" =
   [%test_result: int]
     (Price.to_int_cents (Price.of_float_exn 150.25))
@@ -27,6 +28,7 @@ let%expect_test "of_float_exn: converts dollar amount to cents" =
     ~expect:1
 ;;
 
+(* output based tests *)
 let%expect_test "to_string_dollar: formatted display" =
   print_endline (Price.to_string_dollar (Price.of_int_cents 15025));
   print_endline (Price.to_string_dollar (Price.of_int_cents 100));
@@ -39,6 +41,18 @@ let%expect_test "to_string_dollar: formatted display" =
     $0.00
     |}]
 ;;
+(* 
+(* dune runtest lib/types/test/test_price.ml  *)
+let%expect_test "...." =
+  print_endline "my test output";
+  [%expect {||}]
+;;
+
+(* dune promote lib/types/test/test_price.ml *)
+let%expect_test "..." =
+  print_endline "my test output";
+  [%expect {| my test output |}]
+;; *)
 
 let%expect_test "of_string: parses dollar amounts with or without $" =
   [%test_result: int]
@@ -73,4 +87,29 @@ let%expect_test "negative to_string_dollar" =
   [%expect {| -$0.01 |}];
   print_endline (Price.to_string_dollar (Price.of_int_cents (-150)));
   [%expect {| -$1.50 |}]
+;;
+
+let %expect_test "same price buy is_more_aggresive" = 
+  let price = Price.of_int_cents 500 in
+  let than = Price.of_int_cents 500 in
+  [%test_result: bool] (Price.is_more_aggressive Side.Buy ~price ~than) ~expect: false
+;;
+
+
+let %expect_test "same price sell is_more_aggresive" = 
+  let price = Price.of_int_cents 500 in
+  let than = Price.of_int_cents 500 in
+  [%test_result: bool] (Price.is_more_aggressive Side.Sell ~price ~than) ~expect: false
+;;
+
+let %expect_test "less for buy is_more_aggresive" = 
+  let price = Price.of_int_cents 500 in
+  let than = Price.of_int_cents 1000 in
+  [%test_result: bool] (Price.is_more_aggressive Side.Buy ~price ~than) ~expect: false
+;;
+
+let %expect_test "greater for buy is_more_aggresive" = 
+  let price = Price.of_int_cents 1500 in
+  let than = Price.of_int_cents 1000 in
+  [%test_result: bool] (Price.is_more_aggressive Side.Buy ~price ~than) ~expect: true
 ;;
