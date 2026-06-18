@@ -29,9 +29,9 @@ let ( - ) = Int.( - )
 let ( * ) price qty = price * qty
 
 let is_more_aggressive side ~price ~than =
- match side with 
- | Side.Buy -> price > than
- | Side.Sell -> price < than
+ match (side:Side.t) with 
+ | Buy -> price > than
+ | Sell -> price < than
   (* ignore side;
   ignore price;
   ignore than;
