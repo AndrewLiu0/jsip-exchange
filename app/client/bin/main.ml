@@ -38,16 +38,17 @@ market-data feed.|}];
       let line = String.strip line in
       if String.is_empty line
       then loop ()
-      else if String.is_prefix line ~prefix:"BOOK"
-      then (
-        match String.chop_prefix line ~prefix:"BOOK " with
-        | None ->
-          print_endline "ERROR: expected BOOK <symbol>";
-          loop ()
-        | Some rest ->
-          let symbol =
-            Symbol.of_string (String.uppercase (String.strip rest))
+      else (
+        let result =
+          Exchange_command.parse line ~default_participant:participant
+        in
+        match result with
+        | Ok (Submit req) ->
+          let%bind.Deferred.Or_error () =
+            Rpc.Rpc.dispatch_exn Rpc_protocol.submit_order_rpc conn req
           in
+          loop ()
+        | Ok (Book symbol) ->
           let%bind result =
             Rpc.Rpc.dispatch_exn Rpc_protocol.book_query_rpc conn symbol
           in
@@ -55,17 +56,8 @@ market-data feed.|}];
            | None ->
              print_endline [%string "No book available for %{symbol#Symbol}"]
            | Some result -> print_endline (Book.to_string result));
-          loop ())
-      else if String.is_prefix line ~prefix:"SUBSCRIBE"
-      then (
-        match String.chop_prefix line ~prefix:"SUBSCRIBE " with
-        | None ->
-          print_endline "ERROR: expected SUBSCRIBE <symbol>";
           loop ()
-        | Some rest ->
-          let symbol =
-            Symbol.of_string (String.uppercase (String.strip rest))
-          in
+        | Ok (Subscribe symbol) ->
           let%bind result =
             Rpc.Pipe_rpc.dispatch
               Rpc_protocol.market_data_rpc
@@ -81,29 +73,17 @@ market-data feed.|}];
              print_endline
                [%string
                  {|
-Subscribed to %{symbol#Symbol} market data. Updates will appear below.
-Continue entering commands as normal.|}];
+  Subscribed to %{symbol#Symbol} market data. Updates will appear below.
+  Continue entering commands as normal.|}];
              (* Read market data in the background; the command loop
                 continues running concurrently. *)
              don't_wait_for
                (Pipe.iter_without_pushback reader ~f:(fun event ->
                   print_endline
                     [%string "[MD] %{Protocol.format_event event}"]));
-             loop ()))
-      else (
-        match
-          Protocol.parse_command_with_default_participant
-            line
-            ~default:participant
-        with
-        | Error msg ->
-          print_endline [%string "ERROR: %{msg}"];
-          loop ()
-        | Ok request ->
-          let%bind.Deferred.Or_error () =
-            Rpc.Rpc.dispatch_exn Rpc_protocol.submit_order_rpc conn request
-          in
-          loop ())
+             loop ())
+        | Error msg -> print_s [%sexp (msg : Error.t)];
+        loop ())
   in
   loop ()
 ;;
