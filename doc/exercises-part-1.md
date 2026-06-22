@@ -1,14 +1,14 @@
-# JSIP Exercises - Week 1
+# JSIP Exercises - Part 1
 
-This week you'll get oriented in the exchange codebase and make your first
+In this part you'll get oriented in the exchange codebase and make your first
 substantive changes to it: filling in the price-comparison primitives,
 fixing the matching engine so it respects price-time priority, adding new
 time-in-force variants and event-driven processing, and refactoring some
 LLM-generated command-parsing code into something more idiomatic. The
-exercises start small and grow in scope; by the end of the week you will
+exercises start small and grow in scope; by the end of this part you will
 have touched every layer of the system at least once.
 
-**Learning goals for Week 1:**
+**Learning goals for Part 1:**
 
 - Read `.mli` files to understand a module's public API and use them to
   navigate an unfamiliar codebase.
@@ -158,7 +158,7 @@ Add an expect test for `to_participant_view` to `test_fill.ml`.
 Note that, for now, the participant view isn't actually used in the client-side display —
 the gateway doesn't (yet) send fill messages to individual participants, and the server
 uses the `Protocol.format_event` rendering. The unit test is enough to demonstrate the new
-function; you'll plug it into the real session feed in Week 2 Exercise 1c, when the
+function; you'll plug it into the real session feed in Part 2 Exercise 1c, when the
 client starts subscribing to its session feed.
 
 ---
@@ -266,7 +266,7 @@ and hard to work with.
 
 The state of this command-line handling, technically working for the current set of
 features, but annoying to modify and awkwardly split up, is a common pattern in
-LLM-generated code. AI tools like Claude Code will eagarly produce logic that works but is
+LLM-generated code. AI tools like Claude Code will eagerly produce logic that works but is
 split across modules with no single owner, and stringly-typed dispatch
 (`String.is_prefix`, `String.uppercase` + match on string literals) where structured types
 would be clearer. In fact, Claude Code was the author of this exact code! We left it as
@@ -438,7 +438,7 @@ pure internal improvement.
 
 ## Stretch: Per-participant P&L tracking
 
-If you finish the rest of Week 1 early, build a small module that tracks
+If you finish the rest of Part 1 early, build a small module that tracks
 each participant's running **P&L** (profit and loss) from their fills.
 This comes into play later in the program when you start implementing
 trading strategies — you might want to ask the system, "how is this
@@ -447,24 +447,24 @@ strategy doing?"
 The model is mark-to-market against a reference price (you can use the
 last trade price per symbol for now):
 
-- A participant's **realised** P&L is the cash they have earned or
+- A participant's **realized** P&L is the cash they have earned or
   spent on closed positions: the difference between what they paid
   for shares and what they sold them for. Buy fills decrease cash by
   `size * price`; sell fills increase cash by `size * price`.
-- A participant's **unrealised** P&L is the paper gain or loss on any
+- A participant's **unrealized** P&L is the paper gain or loss on any
   still-open position, valued at the reference price:
   `number_of_shares * (reference_price - average_entry_price)`. Each fill
   changes the number of shares and the average entry price.
-- Total P&L is realised + unrealised.
+- Total P&L is realized + unrealized.
 
 **What to build:**
 
 1. A new module `lib/pnl/src/pnl.{ml,mli}`. Internally it tracks, for
    each participant and symbol, current inventory, the running cost
-   basis (so you can compute average entry price), and realised
+   basis (so you can compute average entry price), and realized
    cash. Public functions to `apply_fill : t -> Fill.t -> t`,
    `apply_trade_report : t -> Trade_report.t -> t` (to refresh the
-   reference price for unrealised P&L), and `summary : t -> Participant.t -> ...` returning a per-symbol breakdown plus the
+   reference price for unrealized P&L), and `summary : t -> Participant.t -> ...` returning a per-symbol breakdown plus the
    total.
 2. A few expect tests that drive it through some hand-rolled fills
    and a final trade-print, comparing the summary against expected
