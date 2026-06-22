@@ -17,11 +17,14 @@ let run_client ~host ~port ~participant_name =
     Tcp.Where_to_connect.of_host_and_port { host; port }
   in
   let%bind conn = Rpc.Connection.client where_to_connect >>| Result.ok_exn in
+
+  let tif_to_string = List.map ~f:Time_in_force.to_string Time_in_force.all in
+  let enumerate_tif = String.concat ~sep:"|" tif_to_string in
   print_endline
     [%string
       {|
 Connected to exchange at %{host}:%{port#Int} as %{participant#Participant}
-Commands: BUY|SELL <symbol> <size> <price> [IOC|DAY]
+Commands: BUY|SELL <symbol> <size> <price> %{enumerate_tif}
           BOOK <symbol>
           SUBSCRIBE <symbol>  (stream market data)
 

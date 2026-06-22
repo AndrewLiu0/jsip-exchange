@@ -123,12 +123,10 @@ let%expect_test "parse error: unknown time-in-force" =
 let%expect_test "default participant: used when none specified" =
   let default = Participant.of_string "DefaultTrader" in
   let req =
-    Protocol.parse_command_with_default_participant
-      "BUY AAPL 100 150.00"
-      ~default
-    |> Result.map_error ~f:Error.of_string
-    |> ok_exn
-  in
+    match Exchange_command.parse ~default_participant:default "BUY AAPL 100 150.00" |> ok_exn with
+    | Submit r -> r
+    | Book _ | Subscribe _ -> failwith "Expected order" in
+  
   print_endline [%string "participant=%{req.participant#Participant}"];
   [%expect {| participant=DefaultTrader |}]
 ;;
@@ -136,12 +134,10 @@ let%expect_test "default participant: used when none specified" =
 let%expect_test "default participant: overridden by explicit 'as'" =
   let default = Participant.of_string "DefaultTrader" in
   let req =
-    Protocol.parse_command_with_default_participant
-      "BUY AAPL 100 150.00 as Alice"
-      ~default
-    |> Result.map_error ~f:Error.of_string
-    |> ok_exn
-  in
+    match Exchange_command.parse ~default_participant:default "BUY AAPL 100 150.00 as Alice" |> ok_exn with
+    | Submit r -> r
+    | Book _ | Subscribe _ -> failwith "Expected order" in
+  
   print_endline [%string "participant=%{req.participant#Participant}"];
   [%expect {| participant=Alice |}]
 ;;

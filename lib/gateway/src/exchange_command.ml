@@ -67,7 +67,7 @@ let parse ?default_participant line : t Or_error.t =
           match rest with 
           | tif_str :: rest' ->
             (match String.uppercase tif_str  with
-            | "AS" -> Ok(Time_in_force.Day, rest') 
+            | "AS" -> Ok(Time_in_force.Day, rest) 
             | other -> 
               (* let%bind result = Or_error.try_with (Time_in_force.of_string other) in *)
               try Ok (Time_in_force.of_string other, rest') with
