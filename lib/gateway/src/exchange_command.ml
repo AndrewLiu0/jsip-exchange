@@ -7,20 +7,13 @@ module Verb = struct
 [@@deriving string ~case_insensitive]
 end
 
-[@@deriving
-  sexp
-  , bin_io
-  , compare
-  , equal
-  , enumerate
-  , hash
-  , string ~case_insensitive]
-
-
 type t =
   | Submit of Order.Request.t
   | Book of Symbol.t
   | Subscribe of Symbol.t
+[@@deriving
+  sexp
+  ]
 
 let parse ?default_participant line : t Or_error.t = 
   let default_participant = match default_participant with 
