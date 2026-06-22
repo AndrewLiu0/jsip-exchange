@@ -26,7 +26,7 @@ let parse ?default_participant line : t Or_error.t =
   | side_str :: rest ->
 
   let open Result.Let_syntax in
-  let verb = Verb.of_string side_str in
+  let verb = Verb.of_string  (String.lowercase side_str |> String.capitalize) in
   match (verb:Verb.t) with 
   | Buy | Sell -> 
     let tif_to_string = List.map ~f:Time_in_force.to_string Time_in_force.all in
@@ -113,7 +113,7 @@ let parse ?default_participant line : t Or_error.t =
     (match rest with 
     | symbol_str :: [] -> 
       Ok(
-        Book( 
+        Subscribe( 
           Symbol.of_string symbol_str): t)
     | _ -> Or_error.error_string "expected a symbol"
     )

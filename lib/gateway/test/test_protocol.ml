@@ -123,10 +123,15 @@ let%expect_test "parse error: unknown time-in-force" =
 let%expect_test "default participant: used when none specified" =
   let default = Participant.of_string "DefaultTrader" in
   let req =
-    match Exchange_command.parse ~default_participant:default "BUY AAPL 100 150.00" |> ok_exn with
+    match
+      Exchange_command.parse
+        ~default_participant:default
+        "BUY AAPL 100 150.00"
+      |> ok_exn
+    with
     | Submit r -> r
-    | Book _ | Subscribe _ -> failwith "Expected order" in
-  
+    | Book _ | Subscribe _ -> failwith "Expected order"
+  in
   print_endline [%string "participant=%{req.participant#Participant}"];
   [%expect {| participant=DefaultTrader |}]
 ;;
@@ -134,12 +139,47 @@ let%expect_test "default participant: used when none specified" =
 let%expect_test "default participant: overridden by explicit 'as'" =
   let default = Participant.of_string "DefaultTrader" in
   let req =
-    match Exchange_command.parse ~default_participant:default "BUY AAPL 100 150.00 as Alice" |> ok_exn with
+    match
+      Exchange_command.parse
+        ~default_participant:default
+        "BUY AAPL 100 150.00 as Alice"
+      |> ok_exn
+    with
     | Submit r -> r
-    | Book _ | Subscribe _ -> failwith "Expected order" in
-  
+    | Book _ | Subscribe _ -> failwith "Expected order"
+  in
   print_endline [%string "participant=%{req.participant#Participant}"];
   [%expect {| participant=Alice |}]
+;;
+
+(* 8c Additional Tests *)
+
+let%expect_test "BOOK with a symbol argument" =
+  let default = Participant.of_string "DefaultTrader" in
+  let symbol =
+    match
+      Exchange_command.parse ~default_participant:default "BOOK AAPL"
+      |> ok_exn
+    with
+    | Book s -> s
+    | Submit _ | Subscribe _ -> failwith "Expected order"
+  in
+  print_endline [%string "symbol=%{symbol#Symbol}"];
+  [%expect {| symbol=AAPL |}]
+;;
+
+let%expect_test "SUBSCRIBE with case-insensitive input" =
+  let default = Participant.of_string "DefaultTrader" in
+  let symbol =
+    match
+      Exchange_command.parse ~default_participant:default "subsCribe AAPL"
+      |> ok_exn
+    with
+    | Subscribe s -> s
+    | Submit _ |  Book _ -> failwith "Expected order"
+  in
+  print_endline [%string "symbol=%{symbol#Symbol}"];
+  [%expect {| symbol=AAPL |}]
 ;;
 
 (* --- Event formatting --- *)
