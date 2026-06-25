@@ -4,7 +4,7 @@
     participant identity established at login plus a pipe that the
     [Dispatcher] writes to whenever a matching-engine event involving this
     participant is produced ([Order_accept], [Order_cancel], [Order_reject],
-    [Fill] as aggressor or resting party).
+[Fill] as aggressor or resting party).
 
     The reader half is handed back to the client via [session_feed_rpc]; the
     client drains it asynchronously. *)

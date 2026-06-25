@@ -12,12 +12,17 @@ open Jsip_types
 open Jsip_gateway
 
 let run_client ~host ~port ~participant_name =
-  let participant = Participant.of_string participant_name in
   let where_to_connect =
     Tcp.Where_to_connect.of_host_and_port { host; port }
   in
   let%bind conn = Rpc.Connection.client where_to_connect >>| Result.ok_exn in
 
+  let %bind login_result =  Rpc.Rpc.dispatch_exn Rpc_protocol.login_rpc conn participant_name in
+  (match login_result with 
+  | Error err ->  print_endline [%string "Login failed : %{Error.to_string_hum err} " ];
+  | Ok _participant ->  ());
+  (* TODO: login produces its own instance of participant, *)
+  let participant = Or_error.ok_exn login_result in 
   let tif_to_string = List.map ~f:Time_in_force.to_string Time_in_force.all in
   let enumerate_tif = String.concat ~sep:"|" tif_to_string in
   print_endline

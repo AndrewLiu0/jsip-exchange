@@ -6,11 +6,13 @@ type t =
   { market_data_subscribers_by_symbol :
       Exchange_event.t Pipe.Writer.t Bag.t Symbol.Table.t
   ; audit_subscribers : Exchange_event.t Pipe.Writer.t Bag.t
+  ; participant_to_session: Session.t Participant.Table.t
   }
 
 let create () =
   { market_data_subscribers_by_symbol = Symbol.Table.create ()
   ; audit_subscribers = Bag.create ()
+  ; participant_to_session = Participant.Table.create()
   }
 ;;
 
@@ -61,11 +63,36 @@ let push_audit t event =
     Pipe.write_without_pushback_if_open writer event)
 ;;
 
+let clean_up_session t session = 
+  let participant = Session.participant session in 
+  Hashtbl.remove t.participant_to_session participant;
+  return(Session.close(session))
+;;
+
+let set_up_session t participant = 
+  let%bind () =  match Hashtbl.find t.participant_to_session participant with
+  | Some session -> 
+    clean_up_session t session 
+  | None -> return ()
+  in 
+  Hashtbl.add_exn t.participant_to_session ~key:participant ~data:(Session.create participant);
+  return ()
+;;
+
+(* Helper for exchange_server login*)
+let register_session t session = 
+  let participant = Session.participant session in 
+  if Hashtbl.mem t.participant_to_session participant
+    then Or_error.error_string "Participant already logged onto exchange"
+    else (Hashtbl.set t.participant_to_session ~key: participant ~data: session; Ok())
+
 let push_to_session t participant event =
   (* TODO: Once sessions have been implemented this function should write the
      event to the appropriate session's pipe. For now we have the server
      binary print these events to stdout while tests can silence them. *)
-  ignore t;
+  match Hashtbl.find t.participant_to_session participant with
+  | Some session -> Session.push session event;
+  | None -> ();
   print_endline
     [%string
       "[for %{participant#Participant}] %{Protocol.format_event event}"]

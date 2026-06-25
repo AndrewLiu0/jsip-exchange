@@ -11,6 +11,12 @@ type t =
   ; port : int
   }
 
+module Connection_state = struct
+  type t = { mutable session : Session.t option }
+
+  let participant t = Option.map t.session ~f:Session.participant
+end
+
 (* Bound how many client requests can sit in the queue waiting for the
    matching engine. Once the queue is full, [Pipe.write] returns a pending
    deferred and the [submit_order_rpc] handler blocks until the engine has
@@ -33,6 +39,10 @@ let start_matching_loop ~engine ~dispatcher request_reader =
 let start ~symbols ~port () =
   let engine = Matching_engine.create symbols in
   let dispatcher = Dispatcher.create () in
+  (* request_writer: network RPC handlers write incoming client requests here
+     request_reader: the backend exexution engine consumes requests from this
+     stream
+  *)
   let request_reader, request_writer = Pipe.create () in
   Pipe.set_size_budget request_writer request_queue_size_budget;
   start_matching_loop ~engine ~dispatcher request_reader;
@@ -40,10 +50,35 @@ let start ~symbols ~port () =
     Rpc.Implementations.create_exn
       ~implementations:
         [ Rpc.Rpc.implement
+            Rpc_protocol.login_rpc
+            (fun (state : Connection_state.t) request ->
+               let trimmed = String.strip request in
+               if String.is_empty trimmed
+               then return (Or_error.error_string "Invalid participant name")
+               else (
+                 let participant = Participant.of_string trimmed in
+                 let session = Session.create participant in
+                 match Dispatcher.register_session dispatcher session with
+                 | Ok () ->
+                   state.session <- Some session;
+                   return (Ok participant)
+                 | Error err -> return (Error err)))
+        ; Rpc.Rpc.implement
             Rpc_protocol.submit_order_rpc
             (fun state request ->
-               ignore state;
-               handle_submit ~request_writer request)
+               match Connection_state.participant state with
+               | Some participant ->
+                 let new_request =
+                   { Order.Request.symbol = request.symbol
+                   ; participant
+                   ; side = request.side
+                   ; price = request.price
+                   ; size = request.size
+                   ; time_in_force = request.time_in_force
+                   }
+                 in
+                 handle_submit ~request_writer new_request
+               | None -> return (Or_error.error_string "Not logged_in"))
         ; Rpc.Rpc.implement' Rpc_protocol.book_query_rpc (fun state symbol ->
             ignore state;
             Matching_engine.book engine symbol
@@ -67,7 +102,18 @@ let start ~symbols ~port () =
   let%map tcp_server =
     Rpc.Connection.serve
       ~implementations
-      ~initial_connection_state:(fun _addr _conn -> ())
+      ~initial_connection_state:(fun _addr conn ->
+        let state = { Connection_state.session = None } in
+        don't_wait_for
+          (let%bind () = Rpc.Connection.close_finished conn in
+           match Connection_state.participant state with
+           | Some _participant ->
+             (match state.session with
+              | None -> return ()
+              | Some session ->
+                Dispatcher.clean_up_session dispatcher session)
+           | None -> return ());
+        state)
       ~where_to_listen:(Tcp.Where_to_listen.of_port port)
       ()
   in
