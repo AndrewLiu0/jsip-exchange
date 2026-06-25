@@ -49,13 +49,12 @@ let audit_log_rpc =
     ()
 ;;
 
-
-
-(* let login_rpc (participant_name:string): (Participant.t) Or_error.t =
-  let trimmed = String.strip participant_name in 
-  if String.is_empty trimmed then 
-    Or_error.error_string "Invalid participant name"
-  else 
-    let participant = Participant.create participant_name in 
-    let session = Session.create participant in 
-     *)
+let session_feed_rpc =
+  Rpc.Pipe_rpc.create
+    ~name:"session-feed"
+    ~version:1
+    ~bin_query:Unit.bin_t
+    ~bin_response:Exchange_event.bin_t
+    ~bin_error:Error.bin_t
+    ()
+;;

@@ -54,3 +54,4 @@ val market_data_rpc
     credentials; this simulator does not, but the same intent applies. *)
 val audit_log_rpc : (unit, Exchange_event.t, Error.t) Rpc.Pipe_rpc.t
 
+val session_feed_rpc: (unit, Exchange_event.t, Error.t) Rpc.Pipe_rpc.t
