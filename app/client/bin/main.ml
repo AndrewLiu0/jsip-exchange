@@ -11,18 +11,28 @@ open! Async
 open Jsip_types
 open Jsip_gateway
 
+
 let run_client ~host ~port ~participant_name =
   let where_to_connect =
     Tcp.Where_to_connect.of_host_and_port { host; port }
   in
   let%bind conn = Rpc.Connection.client where_to_connect >>| Result.ok_exn in
+  let%bind login_result =
+    Rpc.Rpc.dispatch_exn Rpc_protocol.login_rpc conn participant_name
+  in
+  (match login_result with
+   | Error err ->
+     print_endline [%string "Login failed : %{Error.to_string_hum err} "]
+   | Ok _participant -> ());
+  let participant = Or_error.ok_exn login_result in
+  
 
-  let %bind login_result =  Rpc.Rpc.dispatch_exn Rpc_protocol.login_rpc conn participant_name in
-  (match login_result with 
-  | Error err ->  print_endline [%string "Login failed : %{Error.to_string_hum err} " ];
-  | Ok _participant ->  ());
-  let participant = Or_error.ok_exn login_result in 
-  let tif_to_string = List.map ~f:Time_in_force.to_string Time_in_force.all in
+  
+  (* let %bind session_feed_result = Rpc.Pipe_rpc.dispatch
+     Rpc_protocol.session_feed_rpc conn in *)
+  let tif_to_string =
+    List.map ~f:Time_in_force.to_string Time_in_force.all
+  in
   let enumerate_tif = String.concat ~sep:"|" tif_to_string in
   print_endline
     [%string
@@ -37,6 +47,23 @@ by the server process; the SUBSCRIBE command attaches you to a per-symbol
 market-data feed.|}];
   let rec loop () =
     print_string "> ";
+    let%bind session_feed_result =
+    Rpc.Pipe_rpc.dispatch Rpc_protocol.session_feed_rpc conn ()
+    in
+
+    (match session_feed_result with 
+    | Error err | Ok(Error err) -> print_endline [%string "ERROR session feed: %{Error.to_string_hum err}" ]
+    | Ok(Ok(reader, _id)) ->
+      don't_wait_for(
+        Pipe.iter_without_pushback reader ~f:(fun event-> match event with 
+        | Fill fill -> Option.value (Fill.to_participant_view fill participant) ~default:"" |> print_endline 
+        (* TODO: handle other exchange events, unsure of behavior*)
+        | _ -> Protocol.format_event event |> print_endline;
+        )
+      )
+    );
+
+
     match%bind Reader.read_line (Lazy.force Reader.stdin) with
     | `Eof ->
       print_endline "\nDisconnected.";
@@ -89,8 +116,9 @@ market-data feed.|}];
                   print_endline
                     [%string "[MD] %{Protocol.format_event event}"]));
              loop ())
-        | Error msg -> print_s [%sexp (msg : Error.t)];
-        loop ())
+        | Error msg ->
+          print_s [%sexp (msg : Error.t)];
+          loop ())
   in
   loop ()
 ;;
