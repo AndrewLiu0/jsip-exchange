@@ -39,4 +39,21 @@ let to_string
     (Participant.to_string resting_participant)
 ;;
 
+let to_participant_view t participant =
+  let resting_side = Side.flip t.aggressor_side in
+  let resting_verb =
+    match resting_side with Buy -> "bought" | Side.Sell -> "sold"
+  in
+  if Participant.equal t.resting_participant participant
+  then
+    Some
+      (sprintf
+         "You %s %d %s at %s"
+         resting_verb
+         (Size.to_int t.size)
+         (Symbol.to_string t.symbol)
+         (Price.to_string_dollar t.price))
+  else None
+;;
+
 let notional_cents t = Price.to_int_cents t.price * Size.to_int t.size
