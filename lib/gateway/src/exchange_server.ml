@@ -68,15 +68,7 @@ let start ~symbols ~port () =
             (fun state request ->
                match Connection_state.participant state with
                | Some participant ->
-                 let new_request =
-                   { Order.Request.symbol = request.symbol
-                   ; participant
-                   ; side = request.side
-                   ; price = request.price
-                   ; size = request.size
-                   ; time_in_force = request.time_in_force
-                   }
-                 in
+                 let new_request = {request with participant} in
                  handle_submit ~request_writer new_request
                | None -> return (Or_error.error_string "Not logged_in"))
         ; Rpc.Rpc.implement' Rpc_protocol.book_query_rpc (fun state symbol ->

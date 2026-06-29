@@ -7,9 +7,11 @@ let%expect_test "notional_cents: price * size" =
      ; symbol = Symbol.of_string "AAPL"
      ; price = Price.of_int_cents 15025
      ; size = Size.of_int 100
+     ; aggressor_client_order_id = Client_order_id.For_testing.of_int 1
      ; aggressor_order_id = Order_id.of_string "1"
      ; aggressor_participant = Participant.of_string "Alice"
      ; aggressor_side = Buy
+     ; resting_client_order_id = Client_order_id.For_testing.of_int 1
      ; resting_order_id = Order_id.of_string "2"
      ; resting_participant = Participant.of_string "Bob"
      }
@@ -27,9 +29,11 @@ let bob = Participant.of_string "Bob" in
      ; symbol = Symbol.of_string "AAPL"
      ; price = Price.of_int_cents 15025
      ; size = Size.of_int 100
+     ; aggressor_client_order_id = Client_order_id.For_testing.of_int 1
      ; aggressor_order_id = Order_id.of_string "1"
      ; aggressor_participant = Participant.of_string "Alice"
      ; aggressor_side = Buy
+     ; resting_client_order_id = Client_order_id.For_testing.of_int 1
      ; resting_order_id = Order_id.of_string "2"
      ; resting_participant = bob
      }

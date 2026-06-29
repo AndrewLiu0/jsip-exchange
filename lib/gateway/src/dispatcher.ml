@@ -121,9 +121,11 @@ let dispatch_event t (event : Exchange_event.t) =
       ; symbol = _
       ; price = _
       ; size = _
+      ; aggressor_client_order_id = _
       ; aggressor_order_id = _
       ; aggressor_participant
       ; aggressor_side = _
+      ; resting_client_order_id = _
       ; resting_order_id = _
       ; resting_participant
       } ->

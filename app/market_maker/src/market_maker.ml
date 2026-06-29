@@ -41,6 +41,7 @@ let seed_book (config : Config.t) conn =
            ; price = Price.of_int_cents (config.fair_value_cents - offset)
            ; size = Size.of_int config.size_per_level
            ; time_in_force = Day
+           ; client_order_id = Client_order_id.For_testing.of_int 1
            }
            : Order.Request.t)
       and () =
@@ -51,6 +52,7 @@ let seed_book (config : Config.t) conn =
            ; price = Price.of_int_cents (config.fair_value_cents + offset)
            ; size = Size.of_int config.size_per_level
            ; time_in_force = Day
+           ; client_order_id = Client_order_id.For_testing.of_int 1
            }
            : Order.Request.t)
       in

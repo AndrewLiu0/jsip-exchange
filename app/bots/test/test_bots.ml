@@ -99,6 +99,7 @@ let%expect_test "make_recording_bot wires up a runnable bot" =
              ; price = Price.of_int_cents 15000
              ; size = Size.of_int 10
              ; time_in_force = Day
+             ; client_order_id = Client_order_id.For_testing.of_int 1
              }
          })
   in

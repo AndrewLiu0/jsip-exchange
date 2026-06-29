@@ -17,6 +17,7 @@ module Request : sig
     ; price : Price.t
     ; size : Size.t (** Number of shares/units. Must be positive. *)
     ; time_in_force : Time_in_force.t
+    ; client_order_id: Client_order_id.t
     }
   [@@deriving sexp, bin_io]
 

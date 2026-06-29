@@ -26,7 +26,13 @@ let parse_command line =
           Error [%string "unknown command: %{other} (expected BUY or SELL)"]
       in
       (match rest with
-       | symbol_str :: size_str :: price_str :: rest ->
+       | client_id_str :: symbol_str :: size_str :: price_str :: rest ->
+        
+          let%bind client_id = 
+            Or_error.try_with (fun () -> Client_order_id.of_string client_id_str)
+            |> Result.map_error ~f:Error.to_string_hum
+          in
+          
          let%bind size =
            match Int.of_string_opt size_str with
            | Some n when n > 0 -> Ok n
@@ -77,11 +83,12 @@ let parse_command line =
             ; price
             ; size = Size.of_int size
             ; time_in_force
+            ; client_order_id = client_id (*Placeholder*)
             }
             : Order.Request.t)
        | _ ->
          Error
-           "expected: BUY|SELL <symbol> <size> <price> [DAY|IOC] [as <name>]"))
+           "expected: BUY|SELL <client_order_id> <symbol> <size> <price> [DAY|IOC] [as <name>]"))
 ;;
 
 let parse_command_with_default_participant line ~default =
