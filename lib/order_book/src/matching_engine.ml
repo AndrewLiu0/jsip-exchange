@@ -1,19 +1,35 @@
 open! Core
 open Jsip_types
 
+
+module Order_key = struct
+  module T = struct
+    type t = Participant.t * Client_order_id.t [@@deriving sexp, compare, hash]
+  end
+
+  include T
+  include Comparable.Make(T)
+end
+
+
 type t =
   { books : Order_book.t Symbol.Map.t
   ; order_id_gen : Order_id.Generator.t
   ; mutable next_fill_id : int
+  ; mutable client_order_id_to_order: Order.t Order_key.Map.t
   }
 [@@deriving sexp_of]
+
 
 let create symbols =
   let books =
     List.map symbols ~f:(fun sym -> sym, Order_book.create sym)
     |> Symbol.Map.of_alist_exn
   in
-  { books; order_id_gen = Order_id.Generator.create (); next_fill_id = 1 }
+  { books
+  ; order_id_gen = Order_id.Generator.create ()
+  ; next_fill_id = 1
+  ; client_order_id_to_order = Order_key.Map.empty }
 ;;
 
 let book t symbol = Map.find t.books symbol
@@ -64,13 +80,25 @@ let rec match_loop ~book ~order ~fill_id =
 ;;
 
 let submit t (request : Order.Request.t) =
+  (* Preventing duplicate client_order_id*)
+  if Map.mem t.client_order_id_to_order (request.participant, request.client_order_id)
+    then [ Exchange_event.Order_reject { request; reason = "client order ID already in use" } ]
+  else
   match Map.find t.books request.symbol with
   | None ->
     [ Exchange_event.Order_reject { request; reason = "unknown symbol" } ]
   | Some book ->
+
     let order_id = Order_id.Generator.next t.order_id_gen in
     let order = Order.create request ~order_id in
     let accepted = Exchange_event.Order_accept { order_id; request } in
+
+    (*Updating client order ID map*)
+    let updated_map = Map.set t.client_order_id_to_order 
+      ~key:(request.participant, request.client_order_id) 
+      ~data: order in
+    t.client_order_id_to_order <- updated_map;
+
     (* Snapshot BBO before matching so we can detect changes. *)
     let bbo_before = Order_book.best_bid_offer book in
     (* Match *)
