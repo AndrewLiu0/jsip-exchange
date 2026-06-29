@@ -36,7 +36,7 @@ let book t symbol = Map.find t.books symbol
 (** Run the matching loop: repeatedly find a compatible resting order and
     fill against it. Returns the list of Fill and Trade_report events
     produced, and the next fill_id to use. *)
-let rec match_loop ~book ~order ~fill_id =
+let rec match_loop t ~book ~order ~fill_id =
   if Size.( <= ) (Order.remaining_size order) Size.zero
   then [], fill_id
   else (
@@ -50,19 +50,27 @@ let rec match_loop ~book ~order ~fill_id =
       Order.fill resting ~by:fill_size;
       if Order.is_fully_filled resting
       then Order_book.remove book (Order.order_id resting);
+      (* TODO: do we also have to remove client_order_id here? *)
+      let updated_map =
+        Map.remove
+          t.client_order_id_to_order
+          (Order.participant resting, Order.client_order_id resting)
+      in
+      t.client_order_id_to_order <- updated_map;
+      
       let fill_event =
         Exchange_event.Fill
           { fill_id
           ; symbol = Order.symbol order
           ; price = Order.price resting
           ; size = fill_size
-          ; aggressor_client_order_id = Client_order_id.For_testing.of_int 1
+          ; aggressor_client_order_id = Order.client_order_id order
           ; aggressor_order_id = Order.order_id order
           ; aggressor_participant = Order.participant order
           ; aggressor_side = Order.side order
           ; resting_order_id = Order.order_id resting
           ; resting_participant = Order.participant resting
-          ; resting_client_order_id = Client_order_id.For_testing.of_int 2
+          ; resting_client_order_id = Order.client_order_id resting
           }
       in
       let trade_event =
@@ -73,7 +81,7 @@ let rec match_loop ~book ~order ~fill_id =
           }
       in
       let remaining_events, next_fill_id =
-        match_loop ~book ~order ~fill_id:(fill_id + 1)
+        match_loop t ~book ~order ~fill_id:(fill_id + 1)
       in
       fill_event :: trade_event :: remaining_events, next_fill_id)
 ;;
@@ -107,7 +115,7 @@ let submit t (request : Order.Request.t) =
       let bbo_before = Order_book.best_bid_offer book in
       (* Match *)
       let fill_events, next_fill_id =
-        match_loop ~book ~order ~fill_id:t.next_fill_id
+        match_loop t ~book ~order ~fill_id:t.next_fill_id
       in
       t.next_fill_id <- next_fill_id;
       (* Post-match: rest on book or cancel unfilled remainder. *)
@@ -173,22 +181,20 @@ let cancel
            ; reason = Cancel_reason.Participant_requested
            }
        in
-       (* BBO snapshot*)
-       let bbo_before = Order_book.best_bid_offer book in 
-       (* Removal from client order id map AND actual remove from order_book*)
+       (* BBO snapshot *)
+       let bbo_before = Order_book.best_bid_offer book in
+       (* Removal from client order id map AND actual remove from order_book *)
        let updated_map = Map.remove t.client_order_id_to_order order_key in
        t.client_order_id_to_order <- updated_map;
        Order_book.remove book (Order.order_id order);
-
-       let bbo_after = Order_book.best_bid_offer book in 
+       let bbo_after = Order_book.best_bid_offer book in
        let bbo_events =
-        if Bbo.equal bbo_before bbo_after
-        then []
-        else
-          [ Exchange_event.Best_bid_offer_update
-              { symbol = Order.symbol order; bbo = bbo_after }
-          ]
-      in
-
+         if Bbo.equal bbo_before bbo_after
+         then []
+         else
+           [ Exchange_event.Best_bid_offer_update
+               { symbol = Order.symbol order; bbo = bbo_after }
+           ]
+       in
        List.concat [ [ cancelled ]; bbo_events ])
 ;;

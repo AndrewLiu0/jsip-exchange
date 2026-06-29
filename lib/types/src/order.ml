@@ -81,7 +81,7 @@ let size t = t.size
 let remaining_size t = t.remaining_size
 let time_in_force t = t.time_in_force
 
-let _client_order_id t = t.client_order_id
+let client_order_id t = t.client_order_id
 
 let fill t ~by =
   if Size.( <= ) by Size.zero
