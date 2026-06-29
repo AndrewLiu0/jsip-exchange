@@ -26,16 +26,21 @@ type t =
       ; price : Price.t
       ; size : Size.t
       }
+  | Cancel_reject of
+      { participant : Participant.t
+      ; client_order_id : Client_order_id.t
+      ; reason : string
+      }
 [@@deriving sexp, bin_io]
 
 let is_market_data = function
   | Best_bid_offer_update _ | Trade_report _ -> true
-  | Order_accept _ | Fill _ | Order_cancel _ | Order_reject _ -> false
+  | Order_accept _ | Fill _ | Order_cancel _ | Order_reject _ | Cancel_reject _ -> false
 ;;
 
 let symbol_of_market_data = function
   | Best_bid_offer_update { symbol; bbo = _ }
   | Trade_report { symbol; price = _; size = _ } ->
     Some symbol
-  | Order_accept _ | Fill _ | Order_cancel _ | Order_reject _ -> None
+  | Order_accept _ | Fill _ | Order_cancel _ | Order_reject _ | Cancel_reject _ -> None
 ;;

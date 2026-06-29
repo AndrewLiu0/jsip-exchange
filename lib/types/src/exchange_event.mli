@@ -35,6 +35,11 @@ type t =
       ; price : Price.t
       ; size : Size.t
       }
+  | Cancel_reject of
+      { participant : Participant.t
+      ; client_order_id : Client_order_id.t
+      ; reason : string
+      }
   (** A public trade print. Unlike [Fill], this contains no information about
       the participants — it is what the broader market sees. *)
 [@@deriving sexp, bin_io]

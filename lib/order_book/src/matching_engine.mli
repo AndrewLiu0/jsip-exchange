@@ -25,6 +25,8 @@ val create : Symbol.t list -> t
     rejection). *)
 val submit : t -> Order.Request.t -> Exchange_event.t list
 
+val remove: t -> Participant.t -> Client_order_id.t -> Exchange_event.t list
+
 (** {2 Queries} *)
 
 (** The order book for a given symbol, or [None] if the symbol is not traded
