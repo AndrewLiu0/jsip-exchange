@@ -340,3 +340,168 @@ let%expect_test "dispatcher: closing a subscriber's reader removes the \
   [%expect {| ("after closing reader_b" (count 0)) |}];
   return ()
 ;;
+
+(* ---------------------------------------------------------------- *)
+(* RPC Cancel *)
+(* ---------------------------------------------------------------- *)
+
+let%expect_test "RPC Cancel: submit then cancel" =
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind alice = connect_as ~port Harness.alice in
+    let client_order_id = Client_order_id.For_testing.of_int 1 in
+    (* Bob places a sell *)
+    let%bind () =
+      rpc_submit
+        alice
+        (Harness.sell
+           ~price_cents:15000
+           ~participant:Harness.bob
+           ~client_order_id
+           ())
+    in
+    [%expect {| [for Alice] ACCEPTED id=1 AAPL SELL 100@$150.00 DAY |}];
+    let%bind () = rpc_cancel alice client_order_id in
+    [%expect
+      {| [for Alice] CANCELLED id=1 AAPL remaining=100 reason=PARTICIPANT_REQUESTED |}];
+    return ())
+;;
+
+let%expect_test "cancellation: duplicate client order ID " =
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind alice = connect_as ~port Harness.alice in
+    let client_order_id = Client_order_id.For_testing.of_int 1 in
+    (* Bob places a sell *)
+    let%bind () =
+      rpc_submit
+        alice
+        (Harness.sell
+           ~price_cents:15000
+           ~participant:Harness.bob
+           ~client_order_id
+           ())
+    in
+    [%expect {| [for Alice] ACCEPTED id=1 AAPL SELL 100@$150.00 DAY |}];
+    let%bind () =
+      rpc_submit
+        alice
+        (Harness.sell
+           ~price_cents:15000
+           ~participant:Harness.bob
+           ~client_order_id
+           ())
+    in
+    [%expect
+      {| [for Alice] REJECTED AAPL SELL 100@$150.00 reason=client order ID already in use |}];
+    return ())
+;;
+
+let%expect_test "e2e: cancel filled order error" =
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind alice = connect_as ~port Harness.alice in
+    let%bind bob = connect_as ~port Harness.bob in
+    (* Bob places a sell *)
+    let%bind () =
+      rpc_submit
+        bob
+        (Harness.sell ~price_cents:15000 ~participant:Harness.bob ())
+    in
+    [%expect {| [for Bob] ACCEPTED id=1 AAPL SELL 100@$150.00 DAY |}];
+    (* Alice places a buy — should cross *)
+    let%bind () = rpc_submit alice (Harness.buy ~price_cents:15000 ()) in
+    [%expect
+      {|
+      [for Alice] ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
+      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
+      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
+      |}];
+    let%bind () = rpc_cancel alice (Client_order_id.For_testing.of_int 1) in
+    [%expect
+      {| [for Alice] REJECT CANCELLED client_id = 1 for participant Alice reason = client_order_id doesn't exist for participant |}];
+    return ())
+;;
+
+let%expect_test "RPC Cancel: cancel non-existent order" =
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind alice = connect_as ~port Harness.alice in
+    let client_order_id = Client_order_id.For_testing.of_int 1 in
+    (* Bob places a sell *)
+    let%bind () =
+      rpc_submit
+        alice
+        (Harness.sell
+           ~price_cents:15000
+           ~participant:Harness.bob
+           ~client_order_id
+           ())
+    in
+    [%expect {| [for Alice] ACCEPTED id=1 AAPL SELL 100@$150.00 DAY |}];
+    let%bind () = rpc_cancel alice (Client_order_id.For_testing.of_int 4) in
+    [%expect
+      {| [for Alice] REJECT CANCELLED client_id = 4 for participant Alice reason = client_order_id doesn't exist for participant |}];
+    return ())
+;;
+
+let%expect_test "RPC Cancel: BBO Update" =
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind alice = connect_as ~port Harness.alice in
+    let client_order_id = Client_order_id.For_testing.of_int 1 in
+    (* Bob places a sell *)
+    let%bind () =
+      rpc_submit
+        alice
+        (Harness.sell
+           ~price_cents:15000
+           ~participant:Harness.bob
+           ~client_order_id
+           ())
+    in
+    [%expect {| [for Alice] ACCEPTED id=1 AAPL SELL 100@$150.00 DAY |}];
+    let%bind book = rpc_book alice Harness.aapl in
+    print_endline (Option.value_exn book |> Book.to_string);
+    [%expect
+      {|
+      === AAPL ===
+        BIDS: (empty)
+        ASKS:
+          $150.00 x100
+        BBO: - / $150.00 x100
+      |}];
+    let%bind () = rpc_cancel alice (Client_order_id.For_testing.of_int 1) in
+    [%expect
+      {| [for Alice] CANCELLED id=1 AAPL remaining=100 reason=PARTICIPANT_REQUESTED |}];
+    let%bind book = rpc_book alice Harness.aapl in
+    print_endline (Option.value_exn book |> Book.to_string);
+    [%expect
+      {|
+      === AAPL ===
+        BIDS: (empty)
+        ASKS: (empty)
+        BBO: - / -
+      |}];
+    return ())
+;;
+
+let%expect_test "e2e: two login with same name" =
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind alice = connect_as ~port Harness.alice in
+    let%bind _ = connect_as ~port Harness.alice in
+    [%expect.unreachable];
+    let%bind () = rpc_cancel alice (Client_order_id.For_testing.of_int 1) in
+    [%expect.unreachable];
+    return ())
+[@@expect.uncaught_exn
+  {|
+    (* CR expect_test_collector: This test expectation appears to contain a backtrace.
+       This is strongly discouraged as backtraces are fragile.
+       Please change this test to not include a backtrace. *)
+    (monitor.ml.Error "Participant already logged onto exchange"
+      ("Called from Base__Error.raise in file \"src/error.ml\" (inlined), line 25, characters 47-66"
+        "Called from Base__Or_error.ok_exn in file \"src/or_error.ml\" (inlined), line 100, characters 17-44"
+        "Called from Jsip_test_harness__E2e_helpers.connect_as.(fun) in file \"lib/test_harness/src/e2e_helpers.ml\", line 27, characters 28-56"
+        "Caught by monitor Monitor.protect at file \"lib/test_harness/src/e2e_helpers.ml\", line 9, characters 2-2"))
+    Raised at Base__Result.ok_exn in file "src/result.ml" (inlined), line 135, characters 17-26
+    Called from Async_unix__Thread_safe.block_on_async_exn in file "src/thread_safe.ml", line 161, characters 35-75
+    Called from P. px_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 359, characters 10-25
+    |}]
+;;
+(* TODO: fix uncaught exception *)
