@@ -32,8 +32,8 @@ let%expect_test "e2e: two clients trade with each other" =
     [%expect
       {|
       [for Alice] ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
-      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
-      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
+      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
+      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
       |}];
     return ())
 ;;
@@ -72,10 +72,10 @@ let%expect_test "e2e: three clients, sequential orders, shared book" =
     [%expect
       {|
       [for Alice] ACCEPTED id=3 AAPL BUY 80@$150.10 DAY
-      [for Alice] FILL fill_id=1 AAPL $150.00 x50 aggressor=1|3(Alice) BUY resting=2|1(Bob)
-      [for Alice] FILL fill_id=2 AAPL $150.10 x30 aggressor=1|3(Alice) BUY resting=2|2(Charlie)
-      [for Bob] FILL fill_id=1 AAPL $150.00 x50 aggressor=1|3(Alice) BUY resting=2|1(Bob)
-      [for Charlie] FILL fill_id=2 AAPL $150.10 x30 aggressor=1|3(Alice) BUY resting=2|2(Charlie)
+      [for Alice] FILL fill_id=1 AAPL $150.00 x50 aggressor=1|3(Alice) BUY resting=1|1(Bob)
+      [for Alice] FILL fill_id=2 AAPL $150.10 x30 aggressor=1|3(Alice) BUY resting=1|2(Charlie)
+      [for Bob] FILL fill_id=1 AAPL $150.00 x50 aggressor=1|3(Alice) BUY resting=1|1(Bob)
+      [for Charlie] FILL fill_id=2 AAPL $150.10 x30 aggressor=1|3(Alice) BUY resting=1|2(Charlie)
       |}];
     (* Verify book state *)
     let%bind book = rpc_book alice Harness.aapl in
@@ -131,8 +131,8 @@ let%expect_test "e2e: market data subscriber receives trade and BBO updates" =
     [%expect
       {|
       [for Alice] ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
-      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
-      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
+      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
+      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
       [MD Subscriber] TRADE AAPL $150.00 x100
       [MD Subscriber] BBO AAPL bid=- ask=-
       |}];
@@ -140,6 +140,7 @@ let%expect_test "e2e: market data subscriber receives trade and BBO updates" =
 ;;
 
 let%expect_test "e2e: subscriber only sees events for subscribed symbol" =
+  let gen = Client_order_id.Generator.create () in
   with_server ~symbols:[ Harness.aapl; Harness.tsla ] (fun ~server:_ ~port ->
     let%bind sub = connect_as ~port (Participant.of_string "Sub") in
     let%bind bob = connect_as ~port Harness.bob in
@@ -166,6 +167,7 @@ let%expect_test "e2e: subscriber only sees events for subscribed symbol" =
            ~price_cents:20000
            ~symbol:Harness.tsla
            ~participant:Harness.bob
+           ~client_order_id:(Client_order_id.Generator.next gen)
            ())
     in
     [%expect {| [for Bob] ACCEPTED id=1 TSLA SELL 100@$200.00 DAY |}];
@@ -173,7 +175,11 @@ let%expect_test "e2e: subscriber only sees events for subscribed symbol" =
     let%bind () =
       rpc_submit
         bob
-        (Harness.sell ~price_cents:15000 ~participant:Harness.bob ())
+        (Harness.sell
+           ~price_cents:15000
+           ~participant:Harness.bob
+           ~client_order_id:(Client_order_id.Generator.next gen)
+           ())
     in
     [%expect
       {|
@@ -188,6 +194,7 @@ let%expect_test "e2e: subscriber only sees events for subscribed symbol" =
 (* ---------------------------------------------------------------- *)
 
 let%expect_test "e2e: many clients submit orders concurrently" =
+  let gen = Client_order_id.Generator.create () in
   with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
     let%bind seed = connect_as ~port Harness.bob in
     let%bind () =
@@ -200,6 +207,7 @@ let%expect_test "e2e: many clients submit orders concurrently" =
             (Harness.sell
                ~price_cents:(15000 + i)
                ~participant:Harness.bob
+               ~client_order_id:(Client_order_id.Generator.next gen)
                ())
           |> Deferred.ignore_m)
     in
@@ -230,6 +238,7 @@ let%expect_test "e2e: many clients submit orders concurrently" =
 let%expect_test "e2e: audit log subscriber sees full unfiltered stream \
                  across symbols"
   =
+  let gen = Client_order_id.Generator.create () in
   with_server ~symbols:[ Harness.aapl; Harness.tsla ] (fun ~server:_ ~port ->
     let%bind sub = connect_as ~port (Participant.of_string "Auditor") in
     let%bind alice = connect_as ~port Harness.alice in
@@ -250,7 +259,11 @@ let%expect_test "e2e: audit log subscriber sees full unfiltered stream \
     let%bind () =
       rpc_submit
         bob
-        (Harness.sell ~price_cents:15000 ~participant:Harness.bob ())
+        (Harness.sell
+           ~price_cents:15000
+           ~participant:Harness.bob
+           ~client_order_id:(Client_order_id.Generator.next gen)
+           ())
     in
     [%expect
       {|
@@ -267,6 +280,7 @@ let%expect_test "e2e: audit log subscriber sees full unfiltered stream \
            ~price_cents:20000
            ~symbol:Harness.tsla
            ~participant:Harness.bob
+           ~client_order_id:(Client_order_id.Generator.next gen)
            ())
     in
     [%expect
@@ -280,12 +294,12 @@ let%expect_test "e2e: audit log subscriber sees full unfiltered stream \
     [%expect
       {|
       [AUDIT] ACCEPTED id=3 AAPL BUY 100@$150.00 DAY
-      [AUDIT] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|3(Alice) BUY resting=2|1(Bob)
+      [AUDIT] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|3(Alice) BUY resting=1|1(Bob)
       [AUDIT] TRADE AAPL $150.00 x100
       [AUDIT] BBO AAPL bid=- ask=-
       [for Alice] ACCEPTED id=3 AAPL BUY 100@$150.00 DAY
-      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|3(Alice) BUY resting=2|1(Bob)
-      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|3(Alice) BUY resting=2|1(Bob)
+      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|3(Alice) BUY resting=1|1(Bob)
+      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|3(Alice) BUY resting=1|1(Bob)
       |}];
     return ())
 ;;

@@ -27,6 +27,9 @@ open Jsip_types
     (those arrive as [Order_reject] events on the session feed). *)
 val submit_order_rpc : (Order.Request.t, unit Or_error.t) Rpc.Rpc.t
 
+
+val cancel_order_rpc : (Client_order_id.t, unit Or_error.t) Rpc.Rpc.t
+
 (** Query the order book for a given symbol. Returns a structured snapshot of
     all resting orders on both sides, if a book for that symbol exists. *)
 val book_query_rpc : (Symbol.t, Book.t option) Rpc.Rpc.t

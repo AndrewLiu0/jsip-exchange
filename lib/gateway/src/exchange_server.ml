@@ -71,6 +71,13 @@ let start ~symbols ~port () =
                  let new_request = {request with participant} in
                  handle_submit ~request_writer new_request
                | None -> return (Or_error.error_string "Not logged_in"))
+        ; Rpc.Rpc.implement
+            Rpc_protocol.cancel_order_rpc
+            (fun state request ->
+               match Connection_state.participant state with
+               (*PLACEHOLDER: place the request on the pipe that accepts varaint type for cancellation requests*)
+               | Some participant -> return(Or_error.try_with (fun() -> ignore(Matching_engine.cancel engine participant request)))
+               | None -> return (Or_error.error_string "Not logged_in"))
         ; Rpc.Rpc.implement' Rpc_protocol.book_query_rpc (fun state symbol ->
             ignore state;
             Matching_engine.book engine symbol

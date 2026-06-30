@@ -13,9 +13,9 @@ include Hashable.Make(T)
 module Generator = struct
   type t = { mutable next : int } [@@deriving sexp_of]
 
-  let _create () = { next = 1 }
+  let create () = { next = 1 }
 
-  let _next t =
+  let next t =
     let id = t.next in
     t.next <- t.next + 1;
     id

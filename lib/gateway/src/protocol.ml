@@ -119,6 +119,11 @@ let format_event = function
       (Symbol.to_string symbol)
       (Size.to_int remaining_size)
       (Cancel_reason.to_string reason)
+  | Cancel_reject {participant; client_order_id; reason} ->
+    sprintf "REJECT CANCELLED client_id = %s for participant %s reason = %s " 
+    (Client_order_id.to_string client_order_id)
+    (Participant.to_string participant)
+    (reason)
   | Order_reject { request; reason } ->
     sprintf
       "REJECTED %s %s %d@%s reason=%s"

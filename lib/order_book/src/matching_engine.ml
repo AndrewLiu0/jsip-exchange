@@ -57,7 +57,7 @@ let rec match_loop t ~book ~order ~fill_id =
           (Order.participant resting, Order.client_order_id resting)
       in
       t.client_order_id_to_order <- updated_map;
-      
+
       let fill_event =
         Exchange_event.Fill
           { fill_id
@@ -156,7 +156,7 @@ let cancel
   (client_order_id : Client_order_id.t)
   : Exchange_event.t list
   =
-  let order_key = participant, client_order_id in
+  let order_key = (participant, client_order_id) in
   match Map.find t.client_order_id_to_order order_key with
   | None ->
     [ Exchange_event.Cancel_reject

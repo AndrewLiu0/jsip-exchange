@@ -289,7 +289,7 @@ let%expect_test "round-trip: parse a command, submit, format result" =
     ACCEPTED id=1 AAPL SELL 100@$150.00 DAY
     BBO AAPL bid=- ask=$150.00 x100
     ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
-    FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
+    FILL fill_id=1 AAPL $150.00 x100 aggressor=2|2(Alice) BUY resting=1|1(Bob)
     TRADE AAPL $150.00 x100
     BBO AAPL bid=- ask=-
     |}]
