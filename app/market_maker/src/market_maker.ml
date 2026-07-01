@@ -2,7 +2,7 @@ open! Core
 open! Async
 open Jsip_types
 open Jsip_gateway
-open Jsip_bot_runtime.Bot_runtime
+(* open Jsip_bot_runtime.Bot_runtime *)
 
 module Config = struct
   type t =
@@ -78,7 +78,7 @@ let run (config : Config.t) conn : unit Deferred.t =
   return ()
 ;;
 
-module Market_maker_bot = struct
+(* module Market_maker_bot = struct
   module Config = struct
     type t =
       { symbol : Symbol.t
@@ -91,4 +91,4 @@ module Market_maker_bot = struct
   let on_start (_config : Config.t) (_ctx : Context.t) = return ()
   let on_tick _ _ctx = return ()
   let on_event (_config : Config.t) (_ctx : Context.t) event = return ()
-end
+end *)
