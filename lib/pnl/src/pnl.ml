@@ -60,49 +60,63 @@ let apply_execution
   ~(size : Size.t)
   : Position.t
   =
-  let { Position.shares = old_shares
-      ; average_entry_cents = old_avg
-      ; realized_cents = realized
+  let { Position.shares = shares_before
+      ; average_entry_cents = average_before
+      ; realized_cents = realized_before
       }
     =
     position
   in
-  let qty = Size.to_int size in
-  let price_cents = Float.of_int (Price.to_int_cents price) in
-  let signed_qty = Side.sign side * qty in
-  let same_direction =
-    (old_shares > 0 && signed_qty > 0) || (old_shares < 0 && signed_qty < 0)
+  let quantity = Size.to_int size in
+  let trade_price = Float.of_int (Price.to_int_cents price) in
+  let shares_after = shares_before + (Side.sign side * quantity) in
+  (* A buy extends a position we are not short in; a sell extends a position
+     we are not long in. Anything else trades against the position. *)
+  let extends_position =
+    match side with
+    | Buy -> shares_before >= 0
+    | Sell -> shares_before <= 0
   in
-  if old_shares = 0 || same_direction
+  if extends_position
   then (
-    (* Opening or adding: blend [price] into the average, weighted by the
-       shares resting on each side. *)
-    let new_shares = old_shares + signed_qty in
-    let old_cost = Float.of_int (abs old_shares) *. old_avg in
-    let added_cost = Float.of_int qty *. price_cents in
-    let average_entry_cents =
-      (old_cost +. added_cost) /. Float.of_int (abs new_shares)
+    (* We are adding shares in the direction we already lean, so nothing is
+       realized. Fold the new shares into the running average, weighting
+       each side by its share count. *)
+    let cost_of_shares_held = Float.of_int (abs shares_before) *. average_before in
+    let cost_of_shares_added = Float.of_int quantity *. trade_price in
+    let average_after =
+      (cost_of_shares_held +. cost_of_shares_added)
+      /. Float.of_int (abs shares_after)
     in
-    { Position.shares = new_shares; average_entry_cents; realized_cents = realized })
+    { Position.shares = shares_after
+    ; average_entry_cents = average_after
+    ; realized_cents = realized_before
+    })
   else (
-    (* Reducing, closing, or flipping: realize P&L on the shares that close
-       against the existing position. [position_sign] makes shorts profit
-       when they buy back below their average. *)
-    let closed = Int.min (abs old_shares) qty in
-    let position_sign = if old_shares > 0 then 1 else -1 in
-    let realized_cents =
-      realized
-      +. (Float.of_int (closed * position_sign) *. (price_cents -. old_avg))
+    (* We are trading against the position, so we close shares and book
+       their profit. In this branch a buy means we were short and a sell
+       means we were long. *)
+    let shares_closed = Int.min quantity (abs shares_before) in
+    let were_long = shares_before > 0 in
+    let profit_per_share =
+      if were_long
+      then trade_price -. average_before (* sold above our average = profit *)
+      else average_before -. trade_price (* bought back below it = profit *)
     in
-    let new_shares = old_shares + signed_qty in
-    let average_entry_cents =
-      if new_shares = 0
-      then 0. (* back to flat: no open cost basis *)
-      else if abs old_shares < qty
-      then price_cents (* crossed through zero: reopened at the trade price *)
-      else old_avg (* partial reduction: the average is unchanged *)
+    let realized_after =
+      realized_before +. (Float.of_int shares_closed *. profit_per_share)
     in
-    { Position.shares = new_shares; average_entry_cents; realized_cents })
+    let average_after =
+      if shares_after = 0
+      then 0. (* closed out completely: no position, no average *)
+      else if shares_closed < quantity
+      then trade_price (* closed through zero: the leftover shares open here *)
+      else average_before (* only partly closed: the average is untouched *)
+    in
+    { Position.shares = shares_after
+    ; average_entry_cents = average_after
+    ; realized_cents = realized_after
+    })
 ;;
 
 type t =
