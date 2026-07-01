@@ -6,8 +6,8 @@ open Jsip_bot_runtime.Bot_runtime
 
 module Config = struct
   type t =
-    { symbol : Symbol.t
-    ; participant: Participant.t
+    { participant : Participant.t
+    ; symbol : Symbol.t
     ; fair_value_cents : int
     ; half_spread_cents : int
     ; size_per_level : int
@@ -88,7 +88,7 @@ module Market_maker_bot = struct
   end
 
   let name = "market_maker_bot"
-  let on_start (_config : Config.t) (_ctx:Context.t) = return ()
+  let on_start (_config : Config.t) (_ctx : Context.t) = return ()
   let on_tick _ _ctx = return ()
-  let on_event (_config : Config.t) (_ctx:Context.t) event = return ()
+  let on_event (_config : Config.t) (_ctx : Context.t) event = return ()
 end
