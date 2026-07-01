@@ -778,7 +778,7 @@ all client-facing identification now happens through
 - For per-symbol state (inventory, outstanding orders, "have I
   posted yet?"), use a `Symbol.Table.t`.
 - The client order IDs you introduced in Exercise 1 give you a
-  predictable namespace for the orders you submit, so picking IDs is
+  predictable namespace for the orders you submit, so picking IDs isœ
   straightforward — just keep a counter per symbol on the bot side.
 
 **Tests:** Add a unit test that wires up your bot via

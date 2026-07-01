@@ -504,4 +504,43 @@ let%expect_test "e2e: two login with same name" =
     Called from P. px_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 359, characters 10-25
     |}]
 ;;
+
 (* TODO: fix uncaught exception *)
+
+let%expect_test "e2e: subscribe session feed" =
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind alice = connect_as ~port Harness.alice in
+    let%bind bob = connect_as ~port Harness.bob in
+
+    (*Subscribing session feed*)
+    let%bind result =
+      Rpc.Pipe_rpc.dispatch Rpc_protocol.session_feed_rpc (connection bob) ()
+    in
+    let reader =
+      match result with
+      | Ok (Ok (reader, _id)) -> reader
+      | _ -> failwith "subscribe failed"
+    in
+    don't_wait_for
+      (Pipe.iter_without_pushback reader ~f:(fun event ->
+         let e = Protocol.format_event event in
+         print_endline [%string "[for Bob] %{e}"]));
+
+    (* Bob places a sell *)
+    let%bind () =
+      rpc_submit
+        bob
+        (Harness.sell ~price_cents:15000 ~participant:Harness.bob ())
+    in
+    [%expect {| [for Bob] ACCEPTED id=1 AAPL SELL 100@$150.00 DAY |}];
+    (* Alice places a buy — should cross *)
+    let%bind () = rpc_submit alice (Harness.buy ~price_cents:15000 ()) in
+    [%expect
+      {|
+      [for Alice] ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
+      [for Alice] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
+      [for Bob] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=1|1(Bob)
+      |}];
+    
+    return ())
+;;

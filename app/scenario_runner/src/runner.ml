@@ -21,13 +21,20 @@ let start_bot ~where_to_connect ~oracle (Bot_spec.T spec) =
   let submit request =
     Rpc.Rpc.dispatch_exn Rpc_protocol.submit_order_rpc connection request
   in
-  let cancel order_id =
-    return
-      (Or_error.error_s
-         [%message
-           "Scenario runner: cancel RPC not implemented yet"
-             (order_id : Order_id.t)])
+  let cancel (client_order_id : Client_order_id.t) =
+    Rpc.Rpc.dispatch_exn
+      Rpc_protocol.cancel_order_rpc
+      connection
+      client_order_id
   in
+  let%bind login_result =
+    Rpc.Rpc.dispatch_exn
+      Rpc_protocol.login_rpc
+      connection
+      (Participant.to_string spec.participant)
+  in
+  let (_ : Participant.t) = Or_error.ok_exn login_result in
+  (* Subscribing to the session feed *)
   let bot =
     Bot_runtime.create
       spec.bot
@@ -39,6 +46,10 @@ let start_bot ~where_to_connect ~oracle (Bot_spec.T spec) =
       ~cancel
       ~tick_interval:spec.tick_interval
   in
+  let%bind session_feed, _metadata =
+    Rpc.Pipe_rpc.dispatch_exn Rpc_protocol.session_feed_rpc connection ()
+  in
+  don't_wait_for (Pipe.iter session_feed ~f:(Bot_runtime.feed_event bot));
   let%bind () =
     match spec.is_marketdata_consumer with
     | false -> return ()

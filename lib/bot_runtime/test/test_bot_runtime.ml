@@ -47,7 +47,7 @@ let make_recording_bot ~participant =
       { observed }
       ~participant
       ~oracle
-      ~rng:(Splittable_random.of_int 0)
+    ~rng:(Splittable_random.of_int 0)
       ~submit
       ~cancel
       ~tick_interval:(Time_ns.Span.of_sec 1.0)
