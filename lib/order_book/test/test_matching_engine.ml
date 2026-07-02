@@ -346,19 +346,43 @@ let%expect_test "no market data events on rejection" =
 
 let%expect_test "scenario: two participants trade, book reflects state" =
   let t = Harness.create () in
+  (* Give every order a unique client_order_id so the same-participant orders
+     (Alice's two bids, Bob's two asks) don't trip the engine's duplicate
+     detection. *)
+  let gen = Client_order_id.Generator.create () in
+  let next_id () = Client_order_id.Generator.next gen in
   (* Alice posts bids, Bob posts asks *)
-  submit_ t (Harness.buy ~price_cents:14990 ~size:100 ());
-  submit_ t (Harness.buy ~price_cents:14980 ~size:200 ());
   submit_
     t
-    (Harness.sell ~price_cents:15010 ~size:100 ~participant:Harness.bob ());
+    (Harness.buy ~price_cents:14990 ~size:100 ~client_order_id:(next_id ()) ());
   submit_
     t
-    (Harness.sell ~price_cents:15020 ~size:150 ~participant:Harness.bob ());
+    (Harness.buy ~price_cents:14980 ~size:200 ~client_order_id:(next_id ()) ());
+  submit_
+    t
+    (Harness.sell
+       ~price_cents:15010
+       ~size:100
+       ~participant:Harness.bob
+       ~client_order_id:(next_id ())
+       ());
+  submit_
+    t
+    (Harness.sell
+       ~price_cents:15020
+       ~size:150
+       ~participant:Harness.bob
+       ~client_order_id:(next_id ())
+       ());
   (* Charlie crosses the spread: buys at $150.10 *)
   submit_
     t
-    (Harness.buy ~price_cents:15010 ~size:50 ~participant:Harness.charlie ());
+    (Harness.buy
+       ~price_cents:15010
+       ~size:50
+       ~participant:Harness.charlie
+       ~client_order_id:(next_id ())
+       ());
   Harness.print_book t Harness.aapl;
   Harness.print_bbo t Harness.aapl;
   [%expect
@@ -368,7 +392,7 @@ let%expect_test "scenario: two participants trade, book reflects state" =
     ACCEPTED id=3 AAPL SELL 100@$150.10 DAY
     ACCEPTED id=4 AAPL SELL 150@$150.20 DAY
     ACCEPTED id=5 AAPL BUY 50@$150.10 DAY
-    FILL fill_id=1 AAPL $150.10 x50 aggressor=5(Charlie) BUY resting=3(Bob)
+    FILL fill_id=1 AAPL $150.10 x50 aggressor=5|5(Charlie) BUY resting=3|3(Bob)
     === AAPL ===
       BIDS:
         $149.90 x100
@@ -381,23 +405,46 @@ let%expect_test "scenario: two participants trade, book reflects state" =
     |}]
 ;;
 
+
 let%expect_test "scenario: aggressive IOC sweeps entire book" =
   let t = Harness.create () in
+  (* Bob submits two resting sells here, so give every order a unique
+     client_order_id to avoid tripping the engine's duplicate detection. *)
+  let gen = Client_order_id.Generator.create () in
+  let next_id () = Client_order_id.Generator.next gen in
   submit_
     t
-    (Harness.sell ~price_cents:15000 ~size:50 ~participant:Harness.bob ());
+    (Harness.sell
+       ~price_cents:15000
+       ~size:50
+       ~participant:Harness.bob
+       ~client_order_id:(next_id ())
+       ());
   submit_
     t
     (Harness.sell
        ~price_cents:15010
        ~size:50
        ~participant:Harness.charlie
+       ~client_order_id:(next_id ())
        ());
   submit_
     t
-    (Harness.sell ~price_cents:15020 ~size:50 ~participant:Harness.bob ());
+    (Harness.sell
+       ~price_cents:15020
+       ~size:50
+       ~participant:Harness.bob
+       ~client_order_id:(next_id ())
+       ());
   (* IOC buy for 200 at $150.20 — sweeps all 150 shares, cancels 50 *)
-  submit_ t (Harness.buy ~price_cents:15020 ~size:200 ~time_in_force:Ioc ());
+  submit_
+    t
+    (Harness.buy
+       ~price_cents:15020
+       ~size:200
+       ~time_in_force:Ioc
+       ~client_order_id:(next_id ())
+       ());
   Harness.print_book t Harness.aapl;
   [%expect
     {|
@@ -405,9 +452,9 @@ let%expect_test "scenario: aggressive IOC sweeps entire book" =
     ACCEPTED id=2 AAPL SELL 50@$150.10 DAY
     ACCEPTED id=3 AAPL SELL 50@$150.20 DAY
     ACCEPTED id=4 AAPL BUY 200@$150.20 IOC
-    FILL fill_id=1 AAPL $150.00 x50 aggressor=4(Alice) BUY resting=1(Bob)
-    FILL fill_id=2 AAPL $150.10 x50 aggressor=4(Alice) BUY resting=2(Charlie)
-    FILL fill_id=3 AAPL $150.20 x50 aggressor=4(Alice) BUY resting=3(Bob)
+    FILL fill_id=1 AAPL $150.00 x50 aggressor=4|4(Alice) BUY resting=1|1(Bob)
+    FILL fill_id=2 AAPL $150.10 x50 aggressor=4|4(Alice) BUY resting=2|2(Charlie)
+    FILL fill_id=3 AAPL $150.20 x50 aggressor=4|4(Alice) BUY resting=3|3(Bob)
     CANCELLED id=4 AAPL remaining=50 reason=IOC_REMAINDER
     === AAPL ===
       BIDS: (empty)
