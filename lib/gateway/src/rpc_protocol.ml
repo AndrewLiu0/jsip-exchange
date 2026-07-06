@@ -29,13 +29,13 @@ let book_query_rpc =
     ~include_in_error_count:Only_on_exn
 ;;
 
-let login_rpc = 
+let login_rpc =
   Rpc.Rpc.create
-  ~name: "login"
-  ~version: 1
-  ~bin_query: String.bin_t
-  ~bin_response: [%bin_type_class: Participant.t Or_error.t]
-  ~include_in_error_count:Only_on_exn
+    ~name:"login"
+    ~version:1
+    ~bin_query:String.bin_t
+    ~bin_response:[%bin_type_class: Participant.t Or_error.t]
+    ~include_in_error_count:Only_on_exn
 ;;
 
 let market_data_rpc =

@@ -30,8 +30,11 @@ let set_side_map t side orders =
   | Sell -> t.asks <- orders
 ;;
 
-(* Unused but needed for interface*)
-let orders_on_side t side = List.filter (Map.data t.id_to_order) ~f:(fun order -> Side.equal (Order.side order) side )
+(* Unused but needed for interface *)
+let orders_on_side t side =
+  List.filter (Map.data t.id_to_order) ~f:(fun order ->
+    Side.equal (Order.side order) side)
+;;
 
 let add t order =
   let price = Order.price order in

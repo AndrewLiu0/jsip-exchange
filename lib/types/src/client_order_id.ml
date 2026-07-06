@@ -6,9 +6,8 @@ module T = struct
 end
 
 include T
-include Comparable.Make(T)
-include Hashable.Make(T)
-
+include Comparable.Make (T)
+include Hashable.Make (T)
 
 module Generator = struct
   type t = { mutable next : int } [@@deriving sexp_of]

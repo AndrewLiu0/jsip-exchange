@@ -37,8 +37,21 @@ type t
 
 (** Create a fresh exchange harness with the given symbols. Defaults to
     [[aapl; tsla; goog]]. All symbols and participants are automatically
-    registered. *)
+    registered.
+
+    Also resets the test-only [client_order_id] counter so IDs within a test
+    start at [101]. The large offset from the server-assigned [Order_id.t]
+    sequence (which starts at [1]) keeps the two ID namespaces visually
+    distinct in expect output. *)
 val create : ?symbols:Symbol.t list -> unit -> t
+
+(** Reset the test-only [client_order_id] counter so the next [buy]/[sell]
+    call assigns [client_order_id = 101].
+
+    Not normally called from tests directly: [create] calls this
+    automatically, and [E2e_helpers.with_server] calls it for e2e tests that
+    use a real server (where there's no harness). *)
+val reset_client_order_id_counter : unit -> unit
 
 (** The underlying matching engine. *)
 val engine : t -> Matching_engine.t
@@ -47,17 +60,18 @@ val engine : t -> Matching_engine.t
 
     These build [Order.Request.t] values with sensible defaults:
     - symbol: AAPL
-    - participant: Alice
     - size: 100
-    - time_in_force: Day *)
+    - time_in_force: Day
+
+    Participant is supplied at submission time (see [submit] below),
+    defaulting to Alice. *)
 
 val buy
   :  price_cents:int
   -> ?size:int
   -> ?symbol:Symbol.t
-  -> ?participant:Participant.t
   -> ?time_in_force:Time_in_force.t
-  -> ?client_order_id: Client_order_id.t
+  -> ?client_order_id:Client_order_id.t
   -> unit
   -> Order.Request.t
 
@@ -65,23 +79,28 @@ val sell
   :  price_cents:int
   -> ?size:int
   -> ?symbol:Symbol.t
-  -> ?participant:Participant.t
   -> ?time_in_force:Time_in_force.t
-  -> ?client_order_id: Client_order_id.t
+  -> ?client_order_id:Client_order_id.t
   -> unit
   -> Order.Request.t
 
 (** {2 Actions}
 
     These submit orders and immediately print the resulting events, which is
-    the common pattern in expect tests. *)
+    the common pattern in expect tests.
+
+    [?participant] defaults to [alice]. Multi-participant tests override it. *)
 
 (** Submit an order request through the matching engine and print all
     resulting events. Returns the event list for further inspection. *)
-val submit : t -> Order.Request.t -> Exchange_event.t list
+val submit
+  :  ?participant:Participant.t
+  -> t
+  -> Order.Request.t
+  -> Exchange_event.t list
 
 (** Submit and print, discarding the return value. *)
-val submit_ : t -> Order.Request.t -> unit
+val submit_ : ?participant:Participant.t -> t -> Order.Request.t -> unit
 
 (** {2 Sample events}
 
@@ -96,10 +115,18 @@ val submit_ : t -> Order.Request.t -> unit
 val sample_events : Exchange_event.t list
 
 (** As [submit], but events are not printed. *)
-val submit_quiet : t -> Order.Request.t -> Exchange_event.t list
+val submit_quiet
+  :  ?participant:Participant.t
+  -> t
+  -> Order.Request.t
+  -> Exchange_event.t list
 
 (** As [submit_quiet], but event are not printed. *)
-val submit_quiet_ : t -> Order.Request.t -> unit
+val submit_quiet_
+  :  ?participant:Participant.t
+  -> t
+  -> Order.Request.t
+  -> unit
 
 (** {2 Formatting}
 

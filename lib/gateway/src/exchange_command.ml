@@ -16,12 +16,7 @@ type t =
   | Subscribe of Symbol.t
 [@@deriving sexp]
 
-let parse ?default_participant line : t Or_error.t =
-  let default_participant =
-    match default_participant with
-    | None -> Participant.of_string "anonymous"
-    | Some s -> s
-  in
+let parse line : t Or_error.t =
   let parts = String.split line ~on:' ' in
   match parts with
   | [] -> Or_error.error_string "empty command"
@@ -62,36 +57,30 @@ let parse ?default_participant line : t Or_error.t =
           let%bind time_in_force, rest' =
             match rest with
             | tif_str :: rest' ->
-              (match String.uppercase tif_str with
-               | "AS" -> Ok (Time_in_force.Day, rest)
-               | other ->
-                 (try Ok (Time_in_force.of_string other, rest') with
-                  | exn ->
-                    let exn_str = Exn.to_string exn in
-                    Or_error.error_string
-                      [%string
-                        "Invalid tif str: should be one of %{enumerate_tif}\n\
-                        \ exception: %{exn_str}"]))
+              (try Ok (Time_in_force.of_string tif_str, rest') with
+               | exn ->
+                 let exn_str = Exn.to_string exn in
+                 Or_error.error_string
+                   [%string
+                     "Invalid tif str: should be one of %{enumerate_tif}\n\
+                     \ exception: %{exn_str}"])
             | [] -> Ok (Time_in_force.Day, [])
           in
-          let%bind participant =
+          let%bind () =
             match rest' with
-            | "as" :: name :: _ | "AS" :: name :: _ ->
-              Ok (Participant.of_string name)
-            | [] -> Ok default_participant
+            | [] -> Ok ()
             | _ ->
-              let trailing = String.concat ~sep:" " rest in
+              let trailing = String.concat ~sep:" " rest' in
               Or_error.error_string
                 [%string "unexpected trailing arguments: %{trailing}"]
           in
           let order : Order.Request.t =
-            { symbol
-            ; participant
+            { client_order_id = client_id
+            ; symbol
             ; side = Side.of_string side_str
             ; price
             ; size = Size.of_int size
             ; time_in_force
-            ; client_order_id = client_id
             }
           in
           Ok (Submit order)
@@ -99,7 +88,7 @@ let parse ?default_participant line : t Or_error.t =
           Or_error.error_string
             [%string
               "expected: BUY|SELL <client_order_id> <symbol> <size> <price> \
-               [%{enumerate_tif}] [as <name>]"])
+               [%{enumerate_tif}]"])
      | Book ->
        (match rest with
         | symbol_str :: [] -> Ok (Book (Symbol.of_string symbol_str) : t)

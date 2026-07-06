@@ -37,24 +37,22 @@ let seed_book (config : Config.t) conn =
       let offset = config.half_spread_cents + level in
       let%bind () =
         submit
-          ({ symbol = config.symbol
-           ; participant = config.participant
+          ({ client_order_id = Client_order_id.Generator.next gen
+           ; symbol = config.symbol
            ; side = Buy
            ; price = Price.of_int_cents (config.fair_value_cents - offset)
            ; size = Size.of_int config.size_per_level
            ; time_in_force = Day
-           ; client_order_id = Client_order_id.Generator.next gen
            }
            : Order.Request.t)
       and () =
         submit
-          ({ symbol = config.symbol
-           ; participant = config.participant
+          ({ client_order_id = Client_order_id.Generator.next gen
+           ; symbol = config.symbol
            ; side = Sell
            ; price = Price.of_int_cents (config.fair_value_cents + offset)
            ; size = Size.of_int config.size_per_level
            ; time_in_force = Day
-           ; client_order_id = Client_order_id.Generator.next gen
            }
            : Order.Request.t)
       in
@@ -78,17 +76,9 @@ let run (config : Config.t) conn : unit Deferred.t =
   return ()
 ;;
 
-(* module Market_maker_bot = struct
-  module Config = struct
-    type t =
-      { symbol : Symbol.t
-      ; half_spread : float
-      ; order_size : int
-      }
-  end
+(* module Market_maker_bot = struct module Config = struct type t =
+   [{ symbol : Symbol.t ; half_spread : float ; order_size : int }] end
 
-  let name = "market_maker_bot"
-  let on_start (_config : Config.t) (_ctx : Context.t) = return ()
-  let on_tick _ _ctx = return ()
-  let on_event (_config : Config.t) (_ctx : Context.t) event = return ()
-end *)
+   let name = "market_maker_bot" let on_start (_config : Config.t) (_ctx :
+   Context.t) = return () let on_tick _ _ctx = return () let on_event
+   (_config : Config.t) (_ctx : Context.t) event = return () end *)

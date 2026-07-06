@@ -17,7 +17,29 @@ let market_maker = Participant.of_string "MarketMaker"
 
 type t = { engine : Matching_engine.t }
 
+(* Test-only counter that supplies fresh [Client_order_id.t]s to [buy]/[sell]
+   when the caller doesn't specify one. Client order IDs are never reused by
+   the engine, so every order needs a distinct default. Lives at module scope
+   because [buy]/[sell] don't take [t]; reset on every [Harness.create] so
+   IDs are deterministic per test.
+
+   The counter starts at [100] so assigned IDs are [101, 102, ...] while
+   server-assigned [Order_id.t]s start at [1, 2, ...] — the large offset
+   makes the two ID namespaces visually distinct in expect output. *)
+let client_order_id_offset = 100
+let client_order_id_counter = ref client_order_id_offset
+
+let next_client_order_id () =
+  incr client_order_id_counter;
+  Client_order_id.For_testing.of_int !client_order_id_counter
+;;
+
+let reset_client_order_id_counter () =
+  client_order_id_counter := client_order_id_offset
+;;
+
 let create ?(symbols = [ aapl; tsla; goog ]) () =
+  reset_client_order_id_counter ();
   { engine = Matching_engine.create symbols }
 ;;
 
@@ -30,41 +52,37 @@ let make_request
   ~price_cents
   ?(size = 100)
   ?(symbol = aapl)
-  ?(participant = alice)
   ?(time_in_force = Time_in_force.Day)
-  ?(client_order_id = Client_order_id.For_testing.of_int 1)
+  ?(client_order_id = next_client_order_id ())
   ()
   : Order.Request.t
   =
-  { symbol
-  ; participant
+  { client_order_id
+  ; symbol
   ; side
   ; price = Price.of_int_cents price_cents
   ; size = Size.of_int size
   ; time_in_force
-  ; client_order_id
   }
 ;;
 
-let buy ~price_cents ?size ?symbol ?participant ?time_in_force ?client_order_id () =
+let buy ~price_cents ?size ?symbol ?time_in_force ?client_order_id () =
   make_request
     ~side:Buy
     ~price_cents
     ?size
     ?symbol
-    ?participant
     ?time_in_force
     ?client_order_id
     ()
 ;;
 
-let sell ~price_cents ?size ?symbol ?participant ?time_in_force ?client_order_id() =
+let sell ~price_cents ?size ?symbol ?time_in_force ?client_order_id () =
   make_request
     ~side:Sell
     ~price_cents
     ?size
     ?symbol
-    ?participant
     ?time_in_force
     ?client_order_id
     ()
@@ -87,28 +105,35 @@ let print_events ?(show = Show.all) events =
 
 let print_event event = print_endline (Protocol.format_event event)
 
-let submit t request =
-  let events = Matching_engine.submit t.engine request in
+let submit ?(participant = alice) t request =
+  let events = Matching_engine.submit t.engine ~participant request in
   print_events events;
   events
 ;;
 
-let submit_ t request = ignore (submit t request : Exchange_event.t list)
-let submit_quiet t request = Matching_engine.submit (engine t) request
+let submit_ ?participant t request =
+  ignore (submit ?participant t request : Exchange_event.t list)
+;;
+
+let submit_quiet ?(participant = alice) t request =
+  Matching_engine.submit (engine t) ~participant request
+;;
 
 let sample_events : Exchange_event.t list =
   let order_request : Order.Request.t =
-    { symbol = aapl
-    ; participant = alice
+    { client_order_id = Client_order_id.For_testing.of_int 1
+    ; symbol = aapl
     ; side = Buy
     ; price = Price.of_int_cents 15000
     ; size = Size.of_int 100
     ; time_in_force = Day
-    ; client_order_id =  Client_order_id.For_testing.of_int 1
     }
   in
   [ Order_accept
-      { order_id = Order_id.For_testing.of_int 1; request = order_request }
+      { order_id = Order_id.For_testing.of_int 1
+      ; participant = alice
+      ; request = order_request
+      }
   ; Fill
       { fill_id = 1
       ; symbol = aapl
@@ -124,12 +149,17 @@ let sample_events : Exchange_event.t list =
       }
   ; Order_cancel
       { order_id = Order_id.For_testing.of_int 1
+      ; client_order_id = Client_order_id.For_testing.of_int 1
       ; participant = alice
       ; symbol = aapl
       ; remaining_size = Size.of_int 50
       ; reason = Ioc_remainder
       }
-  ; Order_reject { request = order_request; reason = "unknown symbol" }
+  ; Order_reject
+      { participant = alice
+      ; request = order_request
+      ; reason = "unknown symbol"
+      }
   ; Best_bid_offer_update
       { symbol = aapl
       ; bbo =
@@ -149,8 +179,8 @@ let sample_events : Exchange_event.t list =
   ]
 ;;
 
-let submit_quiet_ t request =
-  ignore (submit_quiet t request : Exchange_event.t list)
+let submit_quiet_ ?participant t request =
+  ignore (submit_quiet ?participant t request : Exchange_event.t list)
 ;;
 
 let print_book t symbol =

@@ -20,10 +20,8 @@ let%expect_test "notional_cents: price * size" =
   [%test_result: int] (Fill.notional_cents fill) ~expect:1502500
 ;;
 
-
-
 let%expect_test "participant view" =
-let bob = Participant.of_string "Bob" in
+  let bob = Participant.of_string "Bob" in
   let fill =
     ({ fill_id = 1
      ; symbol = Symbol.of_string "AAPL"
@@ -39,7 +37,6 @@ let bob = Participant.of_string "Bob" in
      }
      : Fill.t)
   in
-  print_s[%sexp ((Fill.to_participant_view fill bob): string option) ];
+  print_s [%sexp (Fill.to_participant_view fill bob : string option)];
   [%expect {| ("You sold 100 AAPL at $150.25") |}]
-  
 ;;

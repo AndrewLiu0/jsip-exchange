@@ -27,15 +27,13 @@ open Jsip_types
     (those arrive as [Order_reject] events on the session feed). *)
 val submit_order_rpc : (Order.Request.t, unit Or_error.t) Rpc.Rpc.t
 
-
 val cancel_order_rpc : (Client_order_id.t, unit Or_error.t) Rpc.Rpc.t
 
 (** Query the order book for a given symbol. Returns a structured snapshot of
     all resting orders on both sides, if a book for that symbol exists. *)
 val book_query_rpc : (Symbol.t, Book.t option) Rpc.Rpc.t
 
-val login_rpc :(string, (Participant.t) Or_error.t) Rpc.Rpc.t
-
+val login_rpc : (string, Participant.t Or_error.t) Rpc.Rpc.t
 
 (** Subscribe to market data for one or more symbols. The server pushes BBO
     updates and trade reports as they happen via a single pipe. The query is
@@ -57,4 +55,4 @@ val market_data_rpc
     credentials; this simulator does not, but the same intent applies. *)
 val audit_log_rpc : (unit, Exchange_event.t, Error.t) Rpc.Pipe_rpc.t
 
-val session_feed_rpc: (unit, Exchange_event.t, Error.t) Rpc.Pipe_rpc.t
+val session_feed_rpc : (unit, Exchange_event.t, Error.t) Rpc.Pipe_rpc.t

@@ -6,13 +6,13 @@ type t =
   { market_data_subscribers_by_symbol :
       Exchange_event.t Pipe.Writer.t Bag.t Symbol.Table.t
   ; audit_subscribers : Exchange_event.t Pipe.Writer.t Bag.t
-  ; participant_to_session: Session.t Participant.Table.t
+  ; participant_to_session : Session.t Participant.Table.t
   }
 
 let create () =
   { market_data_subscribers_by_symbol = Symbol.Table.create ()
   ; audit_subscribers = Bag.create ()
-  ; participant_to_session = Participant.Table.create()
+  ; participant_to_session = Participant.Table.create ()
   }
 ;;
 
@@ -63,39 +63,46 @@ let push_audit t event =
     Pipe.write_without_pushback_if_open writer event)
 ;;
 
-let clean_up_session t session = 
-  let participant = Session.participant session in 
+let clean_up_session t session =
+  let participant = Session.participant session in
   Hashtbl.remove t.participant_to_session participant;
-  return(Session.close(session))
+  return (Session.close session)
 ;;
 
-let set_up_session t participant = 
-  let%bind () =  match Hashtbl.find t.participant_to_session participant with
-  | Some session -> 
-    clean_up_session t session 
-  | None -> return ()
-  in 
-  Hashtbl.add_exn t.participant_to_session ~key:participant ~data:(Session.create participant);
+let set_up_session t participant =
+  let%bind () =
+    match Hashtbl.find t.participant_to_session participant with
+    | Some session -> clean_up_session t session
+    | None -> return ()
+  in
+  Hashtbl.add_exn
+    t.participant_to_session
+    ~key:participant
+    ~data:(Session.create participant);
   return ()
 ;;
 
-(* Helper for exchange_server login*)
-let register_session t session = 
-  let participant = Session.participant session in 
+(* Helper for exchange_server login *)
+let register_session t session =
+  let participant = Session.participant session in
   if Hashtbl.mem t.participant_to_session participant
-    then Or_error.error_string "Participant already logged onto exchange"
-    else (Hashtbl.set t.participant_to_session ~key: participant ~data: session; Ok())
+  then Or_error.error_string "Participant already logged onto exchange"
+  else (
+    Hashtbl.set t.participant_to_session ~key:participant ~data:session;
+    Ok ())
+;;
 
 let push_to_session t participant event =
   (* TODO: Once sessions have been implemented this function should write the
      event to the appropriate session's pipe. For now we have the server
      binary print these events to stdout while tests can silence them. *)
   match Hashtbl.find t.participant_to_session participant with
-  | Some session -> Session.push session event;
-  | None -> ();
-  print_endline
-    [%string
-      "[for %{participant#Participant}] %{Protocol.format_event event}"]
+  | Some session -> Session.push session event
+  | None ->
+    ();
+    print_endline
+      [%string
+        "[for %{participant#Participant}] %{Protocol.format_event event}"]
 ;;
 
 let dispatch_event t (event : Exchange_event.t) =
@@ -105,13 +112,13 @@ let dispatch_event t (event : Exchange_event.t) =
     push_market_data t event symbol
   | Trade_report { symbol; price = _; size = _ } ->
     push_market_data t event symbol
-  | Order_accept { order_id = _; request }
-  | Order_reject { request; reason = _ } ->
-    push_to_session t request.participant event
-  | Cancel_reject {participant; client_order_id = _; reason = _} ->
+  | Order_accept { order_id = _; participant; request = _ }
+  | Order_reject { participant; request = _; reason = _ }
+  | Cancel_reject { participant; client_order_id = _; reason = _ } ->
     push_to_session t participant event
   | Order_cancel
       { order_id = _
+      ; client_order_id = _
       ; participant
       ; symbol = _
       ; remaining_size = _

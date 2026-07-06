@@ -4,7 +4,7 @@ open Jsip_types
 open Jsip_order_book
 
 type request =
-  | Submit of Order.Request.t
+  | Submit of Participant.t * Order.Request.t
   | Cancel of Participant.t * Client_order_id.t
 
 type t =
@@ -41,12 +41,16 @@ let start_matching_loop
   don't_wait_for
     (Pipe.iter_without_pushback request_reader ~f:(fun request ->
        match request with
-       | Submit submit_request ->
-         let events = Matching_engine.submit engine submit_request in
+       | Submit (participant, submit_request) ->
+         let events =
+           Matching_engine.submit engine ~participant submit_request
+         in
          Dispatcher.dispatch dispatcher events
-       | Cancel (participant, client_order_id) -> 
-        let events = Matching_engine.cancel engine participant client_order_id in 
-        Dispatcher.dispatch dispatcher events ))
+       | Cancel (participant, client_order_id) ->
+         let events =
+           Matching_engine.cancel engine participant client_order_id
+         in
+         Dispatcher.dispatch dispatcher events))
 ;;
 
 let start ~symbols ~port () =
@@ -81,15 +85,18 @@ let start ~symbols ~port () =
             (fun state request ->
                match Connection_state.participant state with
                | Some participant ->
-                 let new_request = { request with participant } in
-                 handle_request ~request_writer (Submit new_request)
+                 handle_request
+                   ~request_writer
+                   (Submit (participant, request))
                | None -> return (Or_error.error_string "Not logged_in"))
         ; Rpc.Rpc.implement
             Rpc_protocol.cancel_order_rpc
             (fun state client_order_id ->
                match Connection_state.participant state with
                | Some participant ->
-                handle_request ~request_writer (Cancel (participant, client_order_id) )
+                 handle_request
+                   ~request_writer
+                   (Cancel (participant, client_order_id))
                | None -> return (Or_error.error_string "Not logged_in"))
         ; Rpc.Rpc.implement' Rpc_protocol.book_query_rpc (fun state symbol ->
             ignore state;

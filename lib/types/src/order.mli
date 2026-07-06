@@ -7,17 +7,21 @@
 
 open! Core
 
-(** An order as submitted by a participant (before the exchange assigns an
-    order ID). This is what the gateway receives. *)
+(** An order as submitted by a participant (before the exchange assigns a
+    server-side order ID). This is what the gateway receives. The submitting
+    participant is not included here — it is established at connection time
+    via [login_rpc] and attached by the server. *)
 module Request : sig
   type t =
-    { symbol : Symbol.t
-    ; participant : Participant.t
+    { client_order_id : Client_order_id.t
+    (** The client's chosen order ID. Used by the client to refer to this
+        order (e.g., to cancel it) without waiting for the exchange's
+        response. *)
+    ; symbol : Symbol.t
     ; side : Side.t
     ; price : Price.t
     ; size : Size.t (** Number of shares/units. Must be positive. *)
     ; time_in_force : Time_in_force.t
-    ; client_order_id: Client_order_id.t
     }
   [@@deriving sexp, bin_io]
 
@@ -28,15 +32,18 @@ end
     and mutable remaining size. *)
 type t [@@deriving sexp_of, equal, compare]
 
-
 val to_string : t -> string
 
 (** {2 Construction} *)
 
-(** Create a live order from a request and an assigned order ID. The
-    [remaining_size] starts equal to the request's [size]. Raises if the
-    request's [size] is non-positive. *)
-val create : Request.t -> order_id:Order_id.t -> t
+(** Create a live order from a request, an assigned order ID, and the
+    submitting participant. The [remaining_size] starts equal to the
+    request's [size]. Raises if the request's [size] is non-positive. *)
+val create
+  :  Request.t
+  -> order_id:Order_id.t
+  -> participant:Participant.t
+  -> t
 
 (** {2 Accessors} *)
 
@@ -48,7 +55,7 @@ val price : t -> Price.t
 val size : t -> Size.t
 val remaining_size : t -> Size.t
 val time_in_force : t -> Time_in_force.t
-val client_order_id: t -> Client_order_id.t
+val client_order_id : t -> Client_order_id.t
 
 (** {2 Mutation}
 

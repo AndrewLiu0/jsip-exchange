@@ -4,18 +4,18 @@
     participant and symbol it tracks:
 
     - {b inventory} — signed share count ([+] long, [-] short);
-    - {b average entry price} — the running cost basis of the open
-      position, blended across the trades that built it;
-    - {b realized cash} — profit or loss locked in when a position is
-      reduced or closed.
+    - {b average entry price} — the running cost basis of the open position,
+      blended across the trades that built it;
+    - {b realized cash} — profit or loss locked in when a position is reduced
+      or closed.
 
     P&L splits into two halves:
 
     - {b realized} is cash from closed positions — it never changes once
       booked;
     - {b unrealized} is a mark-to-market estimate on the {e open} position,
-      [shares * (reference_price - average_entry)], where the reference
-      price is the last public trade print (see {!apply_trade_report}).
+      [shares * (reference_price - average_entry)], where the reference price
+      is the last public trade print (see {!apply_trade_report}).
 
     Typical use: fold the exchange event stream into a {!t}, feeding
     {!Fill.t} events to {!apply_fill} and trade prints to
@@ -33,8 +33,8 @@
 open! Core
 open Jsip_types
 
-(** A public trade print, used only to refresh the reference (mark) price
-    for unrealized P&L. This mirrors the [Trade_report] payload of
+(** A public trade print, used only to refresh the reference (mark) price for
+    unrealized P&L. This mirrors the [Trade_report] payload of
     {!Exchange_event.t}, which is where these come from on the wire. *)
 module Trade_report : sig
   type t =
@@ -46,9 +46,9 @@ module Trade_report : sig
 
   val create : symbol:Symbol.t -> price:Price.t -> size:Size.t -> t
 
-  (** Extract a trade print from an exchange event, or [None] if the event
-      is not a [Trade_report]. Lets you drive {!apply_trade_report} straight
-      off the event stream. *)
+  (** Extract a trade print from an exchange event, or [None] if the event is
+      not a [Trade_report]. Lets you drive {!apply_trade_report} straight off
+      the event stream. *)
   val of_exchange_event : Exchange_event.t -> t option
 end
 
@@ -57,8 +57,7 @@ module Position : sig
   type t =
     { shares : int (** Signed inventory: [+] long, [-] short, [0] flat. *)
     ; average_entry_cents : float
-    (** Average entry price of the open position, in cents. [0.] when
-        flat. *)
+    (** Average entry price of the open position, in cents. [0.] when flat. *)
     ; realized_cents : float (** Running realized P&L, in cents. *)
     }
   [@@deriving sexp_of, fields ~getters]
@@ -74,8 +73,8 @@ module Summary : sig
     ; shares : int
     ; average_entry : float (** Dollars per share. *)
     ; reference_price : float option
-    (** Last trade print in dollars, or [None] if none seen for this
-        symbol — in which case [unrealized] is [0.]. *)
+    (** Last trade print in dollars, or [None] if none seen for this symbol —
+        in which case [unrealized] is [0.]. *)
     ; realized : float (** Dollars. *)
     ; unrealized : float (** Dollars. *)
     }
