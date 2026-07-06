@@ -2,7 +2,6 @@ open! Core
 open! Async
 open Jsip_types
 open Jsip_gateway
-(* open Jsip_bot_runtime.Bot_runtime *)
 
 module Config = struct
   type t =
@@ -58,27 +57,3 @@ let seed_book (config : Config.t) conn =
       in
       Deferred.unit)
 ;;
-
-let run (config : Config.t) conn : unit Deferred.t =
-  let%bind () = seed_book config conn in
-  let%bind result =
-    Rpc.Pipe_rpc.dispatch Rpc_protocol.session_feed_rpc conn ()
-  in
-  let reader =
-    match result with
-    | Ok (Ok (reader, _id)) -> reader
-    | _ -> failwith "subscribe session failed"
-  in
-  don't_wait_for
-    (Pipe.iter_without_pushback reader ~f:(fun event ->
-       let e = Protocol.format_event event in
-       print_endline [%string "[for MarketMaker] %{e}"]));
-  return ()
-;;
-
-(* module Market_maker_bot = struct module Config = struct type t =
-   [{ symbol : Symbol.t ; half_spread : float ; order_size : int }] end
-
-   let name = "market_maker_bot" let on_start (_config : Config.t) (_ctx :
-   Context.t) = return () let on_tick _ _ctx = return () let on_event
-   (_config : Config.t) (_ctx : Context.t) event = return () end *)

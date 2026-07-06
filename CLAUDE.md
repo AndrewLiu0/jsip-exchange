@@ -38,7 +38,7 @@ At the end of JSIP, students will be able to
 
 ## Ground truth: code, not docs
 
-This project has a `README.md` (overview) and `doc/exercises-week-*.md`
+This project has a `README.md` (overview) and `doc/exercises-part-*.md`
 (per-week exercise specs). As students work on the project these docs will become stale.
 **The `.ml`/`.mli` files are authoritative**.
 
@@ -272,7 +272,7 @@ app/
   scenario_runner/   CLI that boots a chosen scenario
   monitor/           bonsai_term TUI subscribing to the audit log
 doc/
-  exercises-week-{1,2,3,4}.md   per-week exercise specs (treat code as truth)
+  exercises-part-{1,2,3,4}.md   per-week exercise specs (treat code as truth)
 README.md            project overview
 ```
 

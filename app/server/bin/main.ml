@@ -4,8 +4,11 @@
 
     Run with: dune exec app/server/bin/main.exe -- -port 12345
 
-    Optionally seed the book with a market maker: dune exec
-    app/server/bin/main.exe -- -port 12345 -seed-market-maker *)
+    Optionally generate demo traffic for the monitor: dune exec
+    app/server/bin/main.exe -- -port 12345 -trade-back-and-forth
+
+    For a realistic market with the dynamic {!Market_maker_bot} and other
+    bots, use the scenario runner instead of this binary directly. *)
 
 open! Core
 open! Async
@@ -29,28 +32,12 @@ let connect_as ~where_to_connect participant =
   Rpc.Connection.client where_to_connect >>| Result.ok_exn
 ;;
 
-let seed_market_maker ~where_to_connect =
-  let aapl = Symbol.of_string "AAPL" in
-  let mm_participant = Participant.of_string "MarketMaker" in
-  let config : Market_maker.Config.t =
-    { participant = mm_participant
-    ; symbol = aapl
-    ; fair_value_cents = 15000
-    ; half_spread_cents = 10
-    ; size_per_level = 100
-    ; num_levels = 5
-    }
-  in
-  let%bind conn = connect_as ~where_to_connect mm_participant in
-  Market_maker.seed_book config conn
-;;
-
 (* Two market makers per symbol with offset fair values: MM_High's bids cross
    MM_Low's asks every cycle, producing a steady stream of [Fill] /
    [Trade_report] events across multiple symbols for the monitor to render.
 
-   Because [Market_maker.seed_book] always submits Day orders and there is no
-   cancel yet, the un-crossable levels (MM_Low's bids and MM_High's asks)
+   Because [Market_maker.seed_book] always submits Day orders and never
+   cancels, the un-crossable levels (MM_Low's bids and MM_High's asks)
    accumulate over time — this mode is for short demos, not long-running load
    tests. *)
 let trade_back_and_forth ~where_to_connect =
@@ -121,12 +108,6 @@ let start ~port ~market_maker_behavior =
         trade_back_and_forth ~where_to_connect
       in
       print_endline ""
-    | `Seed_market_maker ->
-      let%map () =
-        print_endline "=== Seeding book with market maker orders ===";
-        seed_market_maker ~where_to_connect
-      in
-      print_endline ""
     | `Do_nothing -> Deferred.unit
   in
   print_endline
@@ -149,18 +130,11 @@ let () =
        choose_one
          ~if_nothing_chosen:(Default_to `Do_nothing)
          [ flag
-             "-seed-market-maker"
-             (no_arg_some `Seed_market_maker)
-             ~doc:
-               " pre-seed the book with market maker orders (mutually \
-                exclusive with -trade-back-and-forth)"
-         ; flag
              "-trade-back-and-forth"
              (no_arg_some `Trade_back_and_forth)
              ~doc:
                " run two market makers in a loop, generating sustained \
-                traffic for the monitor (mutually exclusive with \
-                -seed-market-maker)"
+                traffic for the monitor"
          ]
      in
      fun () -> start ~port ~market_maker_behavior)

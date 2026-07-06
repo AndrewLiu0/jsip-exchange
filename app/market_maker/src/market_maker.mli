@@ -6,7 +6,9 @@
 
     This bot places a fixed set of resting orders on both sides of the book
     around a configured "fair value" price. It does not dynamically adjust
-    its quotes in response to fills -- that is left as an extension. *)
+    its quotes in response to fills -- for that, see {!Market_maker_bot},
+    which runs on the bot framework. This static version remains for the
+    server's [-trade-back-and-forth] demo mode. *)
 
 open! Core
 open! Async
@@ -37,5 +39,3 @@ end
     matching-engine response (acceptance, fills, rejection) arrives on the
     participant's session feed. *)
 val seed_book : Config.t -> Rpc.Connection.t -> unit Deferred.t
-
-val run : Config.t -> Rpc.Connection.t -> unit Deferred.t

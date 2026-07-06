@@ -5,6 +5,8 @@
   jsip_order_book
   jsip_gateway
   jsip_market_maker
+  jsip_bot_runtime
+  jsip_fundamental
   jsip_test_harness
   async
   core)
