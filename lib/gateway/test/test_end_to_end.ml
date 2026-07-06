@@ -425,28 +425,25 @@ let%expect_test "RPC Cancel: BBO Update" =
 let%expect_test "e2e: two login with same name" =
   with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
     let%bind alice = connect_as ~port Harness.alice in
-    let%bind _ = connect_as ~port Harness.alice in
-    [%expect.unreachable];
+    (* A second connection dispatches [login_rpc] directly (via [connect],
+       which doesn't log in) so the rejection comes back as a value instead
+       of an exception escaping [connect_as]. *)
+    let%bind second = connect ~port in
+    let%bind login_result =
+      Rpc.Rpc.dispatch_exn
+        Rpc_protocol.login_rpc
+        (connection second)
+        (Participant.to_string Harness.alice)
+    in
+    print_s [%sexp (login_result : Participant.t Or_error.t)];
+    [%expect {| (Error "Participant already logged onto exchange") |}];
+    (* Alice's original session is unaffected: it can still issue RPCs and
+       receives events on its session feed. *)
     let%bind () = rpc_cancel alice (Client_order_id.For_testing.of_int 1) in
-    [%expect.unreachable];
+    [%expect
+      {| [for Alice] REJECT CANCELLED client_id = 1 for participant Alice reason = order not found |}];
     return ())
-[@@expect.uncaught_exn
-  {|
-  (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-     This is strongly discouraged as backtraces are fragile.
-     Please change this test to not include a backtrace. *)
-  (monitor.ml.Error "Participant already logged onto exchange"
-    ("Called from Base__Error.raise in file \"src/error.ml\" (inlined), line 25, characters 47-66"
-      "Called from Base__Or_error.ok_exn in file \"src/or_error.ml\" (inlined), line 100, characters 17-44"
-      "Called from Jsip_test_harness__E2e_helpers.connect_as.(fun) in file \"lib/test_harness/src/e2e_helpers.ml\", line 30, characters 28-56"
-      "Caught by monitor Monitor.protect at file \"lib/test_harness/src/e2e_helpers.ml\", line 12, characters 2-2"))
-  Raised at Base__Result.ok_exn in file "src/result.ml" (inlined), line 135, characters 17-26
-  Called from Async_unix__Thread_safe.block_on_async_exn in file "src/thread_safe.ml", line 161, characters 35-75
-  Called from Ppx_expect_runtime__Test_block.Configured.dump_backtrace in file "runtime/test_block.ml", line 359, characters 10-25
-  |}]
 ;;
-
-(* TODO: fix uncaught exception *)
 
 let%expect_test "e2e: subscribe session feed" =
   with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->

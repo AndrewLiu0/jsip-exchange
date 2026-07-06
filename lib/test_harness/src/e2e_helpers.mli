@@ -18,9 +18,14 @@ val with_server
     the just-submitted request. *)
 type client
 
-(** Connect a client to [port]. The [participant] argument is used to
-    subscribe to session_feed_rpc that printss every event it receives with a
-    participant tag prefix *)
+(** Connect an RPC client to the given port on localhost. The connection is
+    not logged in yet — useful for tests that exercise the login flow itself
+    (rejected names, duplicate participants). *)
+val connect : port:int -> client Deferred.t
+
+(** Connect and log in as the given participant (raising if login fails),
+    then subscribe to [session_feed_rpc] and print every event received with
+    a participant tag prefix. *)
 val connect_as : port:int -> Participant.t -> client Deferred.t
 
 (** The raw RPC connection, useful for tests that exercise unusual RPC paths

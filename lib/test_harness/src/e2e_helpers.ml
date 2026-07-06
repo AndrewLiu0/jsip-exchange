@@ -16,11 +16,16 @@ let with_server ~symbols f =
 
 type client = { conn : Rpc.Connection.t }
 
-let connect_as ~port (participant : Participant.t) =
+let connect ~port =
   let where =
     Tcp.Where_to_connect.of_host_and_port { host = "localhost"; port }
   in
-  let%bind conn = Rpc.Connection.client where >>| Result.ok_exn in
+  let%map conn = Rpc.Connection.client where >>| Result.ok_exn in
+  { conn }
+;;
+
+let connect_as ~port (participant : Participant.t) =
+  let%bind { conn } = connect ~port in
   let%bind login_result =
     Rpc.Rpc.dispatch_exn
       Rpc_protocol.login_rpc
