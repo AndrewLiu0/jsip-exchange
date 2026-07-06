@@ -430,7 +430,8 @@ let%expect_test "e2e: two login with same name" =
     let%bind () = rpc_cancel alice (Client_order_id.For_testing.of_int 1) in
     [%expect.unreachable];
     return ())
-[@@expect.uncaught_exn {|
+[@@expect.uncaught_exn
+  {|
   (* CR expect_test_collector: This test expectation appears to contain a backtrace.
      This is strongly discouraged as backtraces are fragile.
      Please change this test to not include a backtrace. *)
