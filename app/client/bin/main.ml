@@ -11,7 +11,6 @@ open! Async
 open Jsip_types
 open Jsip_gateway
 
-
 let run_client ~host ~port ~participant_name =
   let where_to_connect =
     Tcp.Where_to_connect.of_host_and_port { host; port }
@@ -25,9 +24,6 @@ let run_client ~host ~port ~participant_name =
      print_endline [%string "Login failed : %{Error.to_string_hum err} "]
    | Ok _participant -> ());
   let participant = Or_error.ok_exn login_result in
-  
-
-  
   (* let %bind session_feed_result = Rpc.Pipe_rpc.dispatch
      Rpc_protocol.session_feed_rpc conn in *)
   let tif_to_string =
@@ -48,22 +44,23 @@ market-data feed.|}];
   let rec loop () =
     print_string "> ";
     let%bind session_feed_result =
-    Rpc.Pipe_rpc.dispatch Rpc_protocol.session_feed_rpc conn ()
+      Rpc.Pipe_rpc.dispatch Rpc_protocol.session_feed_rpc conn ()
     in
-
-    (match session_feed_result with 
-    | Error err | Ok(Error err) -> print_endline [%string "ERROR session feed: %{Error.to_string_hum err}" ]
-    | Ok(Ok(reader, _id)) ->
-      don't_wait_for(
-        Pipe.iter_without_pushback reader ~f:(fun event-> match event with 
-        | Fill fill -> Option.value (Fill.to_participant_view fill participant) ~default:"" |> print_endline 
-        (* TODO: handle other exchange events, unsure of behavior*)
-        | _ -> Protocol.format_event event |> print_endline;
-        )
-      )
-    );
-
-
+    (match session_feed_result with
+     | Error err | Ok (Error err) ->
+       print_endline
+         [%string "ERROR session feed: %{Error.to_string_hum err}"]
+     | Ok (Ok (reader, _id)) ->
+       don't_wait_for
+         (Pipe.iter_without_pushback reader ~f:(fun event ->
+            match event with
+            | Fill fill ->
+              Option.value
+                (Fill.to_participant_view fill participant)
+                ~default:""
+              |> print_endline
+            (* TODO: handle other exchange events, unsure of behavior *)
+            | _ -> Protocol.format_event event |> print_endline)));
     match%bind Reader.read_line (Lazy.force Reader.stdin) with
     | `Eof ->
       print_endline "\nDisconnected.";
@@ -73,9 +70,7 @@ market-data feed.|}];
       if String.is_empty line
       then loop ()
       else (
-        let result =
-          Exchange_command.parse line ~default_participant:participant
-        in
+        let result = Exchange_command.parse line in
         match result with
         | Ok (Submit req) ->
           let%bind.Deferred.Or_error () =

@@ -4,6 +4,9 @@ open Jsip_gateway
 open Jsip_types
 
 let with_server ~symbols f =
+  (* Without this reset, default client order IDs would depend on expect-test
+     execution order. *)
+  Harness.reset_client_order_id_counter ();
   let%bind server = Exchange_server.start ~symbols ~port:0 () in
   let port = Exchange_server.port server in
   Monitor.protect

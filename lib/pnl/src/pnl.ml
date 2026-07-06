@@ -13,12 +13,9 @@ module Trade_report = struct
 
   let of_exchange_event : Exchange_event.t -> t option = function
     | Trade_report { symbol; price; size } -> Some { symbol; price; size }
-    | Order_accept _
-    | Fill _
-    | Order_cancel _
-    | Order_reject _
-    | Best_bid_offer_update _
-    | Cancel_reject _ -> None
+    | Order_accept _ | Fill _ | Order_cancel _ | Order_reject _
+    | Best_bid_offer_update _ | Cancel_reject _ ->
+      None
   ;;
 end
 
@@ -41,15 +38,15 @@ end
    - {!Side.sign} gives the signed change to [shares]: buys are [+], sells
      are [-].
    - Growing the position (trading in the same direction, or opening from
-     flat) blends [price] into [average_entry_cents], weighted by the
-     shares on each side. The blended average is what later reductions are
-     measured against.
+     flat) blends [price] into [average_entry_cents], weighted by the shares
+     on each side. The blended average is what later reductions are measured
+     against.
    - Reducing or closing realizes cash on the closed shares:
      [closed * (price - average_entry_cents)] for a long, and the mirror
      image for a short. If the trade crosses through zero, the leftover
-     shares open a fresh position at [price], and the average entry resets
-     to [price]. When the position returns exactly to flat, the average
-     entry is meaningless — reset it to [0.].
+     shares open a fresh position at [price], and the average entry resets to
+     [price]. When the position returns exactly to flat, the average entry is
+     meaningless — reset it to [0.].
 
    Work in cents throughout; convert to dollars only at the {!Summary}
    boundary. *)
@@ -73,16 +70,16 @@ let apply_execution
   (* A buy extends a position we are not short in; a sell extends a position
      we are not long in. Anything else trades against the position. *)
   let extends_position =
-    match side with
-    | Buy -> shares_before >= 0
-    | Sell -> shares_before <= 0
+    match side with Buy -> shares_before >= 0 | Sell -> shares_before <= 0
   in
   if extends_position
   then (
     (* We are adding shares in the direction we already lean, so nothing is
-       realized. Fold the new shares into the running average, weighting
-       each side by its share count. *)
-    let cost_of_shares_held = Float.of_int (abs shares_before) *. average_before in
+       realized. Fold the new shares into the running average, weighting each
+       side by its share count. *)
+    let cost_of_shares_held =
+      Float.of_int (abs shares_before) *. average_before
+    in
     let cost_of_shares_added = Float.of_int quantity *. trade_price in
     let average_after =
       (cost_of_shares_held +. cost_of_shares_added)
@@ -93,14 +90,15 @@ let apply_execution
     ; realized_cents = realized_before
     })
   else (
-    (* We are trading against the position, so we close shares and book
-       their profit. In this branch a buy means we were short and a sell
-       means we were long. *)
+    (* We are trading against the position, so we close shares and book their
+       profit. In this branch a buy means we were short and a sell means we
+       were long. *)
     let shares_closed = Int.min quantity (abs shares_before) in
     let were_long = shares_before > 0 in
     let profit_per_share =
       if were_long
-      then trade_price -. average_before (* sold above our average = profit *)
+      then
+        trade_price -. average_before (* sold above our average = profit *)
       else average_before -. trade_price (* bought back below it = profit *)
     in
     let realized_after =
@@ -110,7 +108,9 @@ let apply_execution
       if shares_after = 0
       then 0. (* closed out completely: no position, no average *)
       else if shares_closed < quantity
-      then trade_price (* closed through zero: the leftover shares open here *)
+      then
+        trade_price
+        (* closed through zero: the leftover shares open here *)
       else average_before (* only partly closed: the average is untouched *)
     in
     { Position.shares = shares_after
@@ -141,9 +141,7 @@ let set_position t participant symbol position =
     |> Option.value ~default:Symbol.Map.empty
   in
   let by_symbol = Map.set by_symbol ~key:symbol ~data:position in
-  { t with
-    positions = Map.set t.positions ~key:participant ~data:by_symbol
-  }
+  { t with positions = Map.set t.positions ~key:participant ~data:by_symbol }
 ;;
 
 let apply_one t ~participant ~symbol ~side ~price ~size =
@@ -185,8 +183,7 @@ let apply_fill t (fill : Fill.t) =
 
 let apply_trade_report t (report : Trade_report.t) =
   { t with
-    references =
-      Map.set t.references ~key:report.symbol ~data:report.price
+    references = Map.set t.references ~key:report.symbol ~data:report.price
   }
 ;;
 

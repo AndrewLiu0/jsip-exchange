@@ -5,12 +5,12 @@ type t =
   ; symbol : Symbol.t
   ; price : Price.t
   ; size : Size.t
-  ; aggressor_client_order_id: Client_order_id.t
   ; aggressor_order_id : Order_id.t
+  ; aggressor_client_order_id : Client_order_id.t
   ; aggressor_participant : Participant.t
   ; aggressor_side : Side.t
-  ; resting_client_order_id: Client_order_id.t
   ; resting_order_id : Order_id.t
+  ; resting_client_order_id : Client_order_id.t
   ; resting_participant : Participant.t
   }
 [@@deriving sexp, bin_io]

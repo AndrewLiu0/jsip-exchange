@@ -29,7 +29,10 @@ let print_summary label t participant =
       (Symbol.to_string row.symbol)
       row.shares
       row.average_entry
-      (Option.value_map row.reference_price ~default:"-" ~f:(sprintf "$%.2f"))
+      (Option.value_map
+         row.reference_price
+         ~default:"-"
+         ~f:(sprintf "$%.2f"))
       row.realized
       row.unrealized);
   printf
@@ -40,8 +43,8 @@ let print_summary label t participant =
 ;;
 
 let%expect_test "build, blend, partially close, then mark" =
-  (* Alice buys 100 @ $150, then 100 more @ $160 (avg entry $155), sells 40
-     @ $170 (realizing $600 on the closed shares), and the market prints at
+  (* Alice buys 100 @ $150, then 100 more @ $160 (avg entry $155), sells 40 @
+     $170 (realizing $600 on the closed shares), and the market prints at
      $180 to mark the remaining 160 shares. The market maker is the resting
      counterparty on every fill, so it carries the mirror-image short. *)
   let pnl =
@@ -81,7 +84,8 @@ let%expect_test "build, blend, partially close, then mark" =
   in
   print_summary "alice" pnl Harness.alice;
   print_summary "market_maker" pnl Harness.market_maker;
-  [%expect {|
+  [%expect
+    {|
     alice
       AAPL: shares=160 avg=$155.00 ref=$180.00 realized=$600.00 unrealized=$4000.00
       TOTAL: realized=$600.00 unrealized=$4000.00 pnl=$4600.00
