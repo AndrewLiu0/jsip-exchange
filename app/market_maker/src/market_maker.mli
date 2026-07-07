@@ -37,5 +37,16 @@ end
     [config.participant]. [submit_order_rpc] is one-way, so this function
     only returns success/failure of the submission attempt; the actual
     matching-engine response (acceptance, fills, rejection) arrives on the
-    participant's session feed. *)
-val seed_book : Config.t -> Rpc.Connection.t -> unit Deferred.t
+    participant's session feed.
+
+    [ids] must be the participant's single long-lived generator, shared
+    across every [seed_book] call for that participant (all symbols, all
+    reseeds) — the exchange never forgets a used client_order_id, so a
+    generator that restarts at 1 gets every later submission rejected as a
+    duplicate. Compare {!Market_maker_bot}, which keeps one generator in its
+    state for the same reason. *)
+val seed_book
+  :  Config.t
+  -> Rpc.Connection.t
+  -> ids:Client_order_id.Generator.t
+  -> unit Deferred.t

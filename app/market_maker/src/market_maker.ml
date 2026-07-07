@@ -15,8 +15,7 @@ module Config = struct
   [@@deriving sexp_of]
 end
 
-let seed_book (config : Config.t) conn =
-  let gen = Client_order_id.Generator.create () in
+let seed_book (config : Config.t) conn ~ids =
   let submit request =
     let%map result =
       Rpc.Rpc.dispatch_exn Rpc_protocol.submit_order_rpc conn request
@@ -36,7 +35,7 @@ let seed_book (config : Config.t) conn =
       let offset = config.half_spread_cents + level in
       let%bind () =
         submit
-          ({ client_order_id = Client_order_id.Generator.next gen
+          ({ client_order_id = Client_order_id.Generator.next ids
            ; symbol = config.symbol
            ; side = Buy
            ; price = Price.of_int_cents (config.fair_value_cents - offset)
@@ -46,7 +45,7 @@ let seed_book (config : Config.t) conn =
            : Order.Request.t)
       and () =
         submit
-          ({ client_order_id = Client_order_id.Generator.next gen
+          ({ client_order_id = Client_order_id.Generator.next ids
            ; symbol = config.symbol
            ; side = Sell
            ; price = Price.of_int_cents (config.fair_value_cents + offset)

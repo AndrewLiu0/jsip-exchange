@@ -40,10 +40,12 @@ let connect_as ~where_to_connect participant =
    MM_Low's asks every cycle, producing a steady stream of [Fill] /
    [Trade_report] events across multiple symbols for the monitor to render.
 
-   Because [Market_maker.seed_book] always submits Day orders and never
-   cancels, the un-crossable levels (MM_Low's bids and MM_High's asks)
-   accumulate over time — this mode is for short demos, not long-running load
-   tests. *)
+   This mode leaks by design and is for short demos, not long-running load
+   tests: [Market_maker.seed_book] always submits Day orders and never
+   cancels, so the un-crossable levels (MM_Low's bids and MM_High's asks)
+   accumulate in the book every cycle; and since neither participant reads
+   its session feed, the accepts and fills also accumulate unread in the
+   session pipes. *)
 let trade_back_and_forth ~where_to_connect =
   (* One pair of MMs per symbol, anchored at a representative fair value. *)
   let symbol_anchors =
@@ -74,13 +76,20 @@ let trade_back_and_forth ~where_to_connect =
   let mm_high = Participant.of_string "MM_High" in
   let%bind low_conn = connect_as ~where_to_connect mm_low in
   let%bind high_conn = connect_as ~where_to_connect mm_high in
+  (* One generator per participant, shared across every symbol and cycle: the
+     exchange never forgets a used client_order_id, so restarting a generator
+     would get all later submissions rejected as duplicates. *)
+  let low_ids = Client_order_id.Generator.create () in
+  let high_ids = Client_order_id.Generator.create () in
   let configs_for_symbol (symbol, anchor) =
     [ ( low_conn
+      , low_ids
       , make
           ~participant:mm_low
           ~symbol
           ~fair_value_cents:(anchor + low_offset_cents) )
     ; ( high_conn
+      , high_ids
       , make
           ~participant:mm_high
           ~symbol
@@ -89,8 +98,10 @@ let trade_back_and_forth ~where_to_connect =
   in
   let configs = List.concat_map symbol_anchors ~f:configs_for_symbol in
   let cycle () =
-    Deferred.List.iter ~how:`Sequential configs ~f:(fun (conn, config) ->
-      Market_maker.seed_book config conn)
+    Deferred.List.iter
+      ~how:`Sequential
+      configs
+      ~f:(fun (conn, ids, config) -> Market_maker.seed_book config conn ~ids)
   in
   let%map () = cycle () in
   Clock_ns.every cycle_period (fun () -> don't_wait_for (cycle ()))

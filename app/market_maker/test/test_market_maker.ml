@@ -2,6 +2,7 @@
 
 open! Core
 open! Async
+open Jsip_types
 open Jsip_test_harness
 open Jsip_market_maker
 open E2e_helpers
@@ -20,7 +21,10 @@ let%expect_test "seed_book: places symmetric bids and asks around fair value"
   =
   with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
     let%bind mm = connect_as ~port Harness.market_maker in
-    let%bind () = Market_maker.seed_book default_config (connection mm) in
+    let ids = Client_order_id.Generator.create () in
+    let%bind () =
+      Market_maker.seed_book default_config (connection mm) ~ids
+    in
     [%expect
       {|
       [for MarketMaker] ACCEPTED id=1 AAPL BUY 100@$149.90 DAY
@@ -29,6 +33,42 @@ let%expect_test "seed_book: places symmetric bids and asks around fair value"
       [for MarketMaker] ACCEPTED id=4 AAPL SELL 100@$150.11 DAY
       [for MarketMaker] ACCEPTED id=5 AAPL BUY 100@$149.88 DAY
       [for MarketMaker] ACCEPTED id=6 AAPL SELL 100@$150.12 DAY
+      |}];
+    return ())
+;;
+
+let%expect_test "seed_book: reseeding with the shared generator issues \
+                 fresh ids, so nothing is rejected as a duplicate"
+  =
+  (* Regression test: seed_book used to create a new generator per call,
+     restarting ids at 1. The exchange never forgets a used client_order_id,
+     so every submission after the first call was rejected — the
+     -trade-back-and-forth demo silently stopped trading after its first
+     cycle. With the caller-owned generator the second seeding must continue
+     at id=7 and be accepted. *)
+  with_server ~symbols:[ Harness.aapl ] (fun ~server:_ ~port ->
+    let%bind mm = connect_as ~port Harness.market_maker in
+    let ids = Client_order_id.Generator.create () in
+    let%bind () =
+      Market_maker.seed_book default_config (connection mm) ~ids
+    in
+    let%bind () =
+      Market_maker.seed_book default_config (connection mm) ~ids
+    in
+    [%expect
+      {|
+      [for MarketMaker] ACCEPTED id=1 AAPL BUY 100@$149.90 DAY
+      [for MarketMaker] ACCEPTED id=2 AAPL SELL 100@$150.10 DAY
+      [for MarketMaker] ACCEPTED id=3 AAPL BUY 100@$149.89 DAY
+      [for MarketMaker] ACCEPTED id=4 AAPL SELL 100@$150.11 DAY
+      [for MarketMaker] ACCEPTED id=5 AAPL BUY 100@$149.88 DAY
+      [for MarketMaker] ACCEPTED id=6 AAPL SELL 100@$150.12 DAY
+      [for MarketMaker] ACCEPTED id=7 AAPL BUY 100@$149.90 DAY
+      [for MarketMaker] ACCEPTED id=8 AAPL SELL 100@$150.10 DAY
+      [for MarketMaker] ACCEPTED id=9 AAPL BUY 100@$149.89 DAY
+      [for MarketMaker] ACCEPTED id=10 AAPL SELL 100@$150.11 DAY
+      [for MarketMaker] ACCEPTED id=11 AAPL BUY 100@$149.88 DAY
+      [for MarketMaker] ACCEPTED id=12 AAPL SELL 100@$150.12 DAY
       |}];
     return ())
 ;;
