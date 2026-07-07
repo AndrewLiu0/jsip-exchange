@@ -144,6 +144,29 @@ let dispatch_event t (event : Exchange_event.t) =
 
 let dispatch t events = List.iter events ~f:(dispatch_event t)
 
+(* Queue-length accessors for the stats snapshot. Sorted so snapshots are
+   deterministic under expect tests. [Pipe.length] on a writer counts the
+   values buffered but not yet read — exactly the "how far behind is this
+   subscriber" number. *)
+
+let market_data_queue_lengths t =
+  Hashtbl.to_alist t.market_data_subscribers_by_symbol
+  |> List.map ~f:(fun (symbol, subscribers) ->
+    symbol, List.map (Bag.to_list subscribers) ~f:Pipe.length)
+  |> List.sort ~compare:(fun (s1, _) (s2, _) -> Symbol.compare s1 s2)
+;;
+
+let audit_queue_lengths t =
+  List.map (Bag.to_list t.audit_subscribers) ~f:Pipe.length
+;;
+
+let session_queue_lengths t =
+  Hashtbl.to_alist t.participant_to_session
+  |> List.map ~f:(fun (participant, session) ->
+    participant, Session.queue_length session)
+  |> List.sort ~compare:(fun (p1, _) (p2, _) -> Participant.compare p1 p2)
+;;
+
 module For_testing = struct
   let audit_subscriber_count t = Bag.length t.audit_subscribers
 end

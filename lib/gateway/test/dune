@@ -5,8 +5,10 @@
   jsip_types
   jsip_order_book
   jsip_gateway
+  jsip_stats
   jsip_test_harness
   async
+  async_rpc_websocket
   core)
  (inline_tests)
  (preprocess

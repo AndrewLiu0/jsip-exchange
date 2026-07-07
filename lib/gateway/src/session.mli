@@ -28,6 +28,10 @@ val reader : t -> Exchange_event.t Pipe.Reader.t
 (** Push an event onto the session's outbound pipe. *)
 val push : t -> Exchange_event.t -> unit
 
+(** Events buffered in the outbound pipe that the client has not yet read.
+    Feeds the stats stream's pipe-occupancy metrics. *)
+val queue_length : t -> int
+
 (** Close the outbound pipe. Subsequent reads on [reader t] will drain any
     remaining buffered events and then EOF. *)
 val close : t -> unit

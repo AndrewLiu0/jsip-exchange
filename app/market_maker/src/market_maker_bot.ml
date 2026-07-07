@@ -63,9 +63,7 @@ let skewed_fair_cents (config : Config.t) ctx =
   - (config.state.inventory * config.inventory_skew_cents_per_share)
 ;;
 
-(* TODO(human): implement [inventory_delta].
-
-   Given a fill and this bot's participant, return the signed change to
+(* Given a fill and this bot's participant, return the signed change to
    inventory: positive if this fill increased our position (we bought),
    negative if it decreased it (we sold), and [0] if we were not involved in
    the fill at all.
