@@ -95,7 +95,7 @@ let post_ladder (config : Config.t) ctx =
       | Sell -> fair_cents + offset
     in
     let request : Order.Request.t =
-      { client_order_id = Client_order_id.Generator.next config.state.ids
+      { client_order_id = Client_order_id.Generator.generate config.state.ids
       ; symbol = config.symbol
       ; side
       ; price = Price.of_int_cents price_cents

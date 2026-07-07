@@ -350,7 +350,7 @@ let%expect_test "scenario: two participants trade, book reflects state" =
      (Alice's two bids, Bob's two asks) don't trip the engine's duplicate
      detection. *)
   let gen = Client_order_id.Generator.create () in
-  let next_id () = Client_order_id.Generator.next gen in
+  let next_id () = Client_order_id.Generator.generate gen in
   (* Alice posts bids, Bob posts asks *)
   submit_
     t
@@ -418,7 +418,7 @@ let%expect_test "scenario: aggressive IOC sweeps entire book" =
   (* Bob submits two resting sells here, so give every order a unique
      client_order_id to avoid tripping the engine's duplicate detection. *)
   let gen = Client_order_id.Generator.create () in
-  let next_id () = Client_order_id.Generator.next gen in
+  let next_id () = Client_order_id.Generator.generate gen in
   submit_
     ~participant:Harness.bob
     t

@@ -146,7 +146,7 @@ let%expect_test "e2e: subscriber only sees events for subscribed symbol" =
         (Harness.sell
            ~price_cents:20000
            ~symbol:Harness.tsla
-           ~client_order_id:(Client_order_id.Generator.next gen)
+           ~client_order_id:(Client_order_id.Generator.generate gen)
            ())
     in
     [%expect {| [for Bob] ACCEPTED id=1 TSLA SELL 100@$200.00 DAY |}];
@@ -156,7 +156,7 @@ let%expect_test "e2e: subscriber only sees events for subscribed symbol" =
         bob
         (Harness.sell
            ~price_cents:15000
-           ~client_order_id:(Client_order_id.Generator.next gen)
+           ~client_order_id:(Client_order_id.Generator.generate gen)
            ())
     in
     [%expect
@@ -184,7 +184,7 @@ let%expect_test "e2e: many clients submit orders concurrently" =
             seed
             (Harness.sell
                ~price_cents:(15000 + i)
-               ~client_order_id:(Client_order_id.Generator.next gen)
+               ~client_order_id:(Client_order_id.Generator.generate gen)
                ())
           |> Deferred.ignore_m)
     in
@@ -238,7 +238,7 @@ let%expect_test "e2e: audit log subscriber sees full unfiltered stream \
         bob
         (Harness.sell
            ~price_cents:15000
-           ~client_order_id:(Client_order_id.Generator.next gen)
+           ~client_order_id:(Client_order_id.Generator.generate gen)
            ())
     in
     [%expect
@@ -255,7 +255,7 @@ let%expect_test "e2e: audit log subscriber sees full unfiltered stream \
         (Harness.sell
            ~price_cents:20000
            ~symbol:Harness.tsla
-           ~client_order_id:(Client_order_id.Generator.next gen)
+           ~client_order_id:(Client_order_id.Generator.generate gen)
            ())
     in
     [%expect

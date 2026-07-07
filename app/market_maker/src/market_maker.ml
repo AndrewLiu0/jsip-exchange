@@ -35,7 +35,7 @@ let seed_book (config : Config.t) conn ~ids =
       let offset = config.half_spread_cents + level in
       let%bind () =
         submit
-          ({ client_order_id = Client_order_id.Generator.next ids
+          ({ client_order_id = Client_order_id.Generator.generate ids
            ; symbol = config.symbol
            ; side = Buy
            ; price = Price.of_int_cents (config.fair_value_cents - offset)
@@ -45,7 +45,7 @@ let seed_book (config : Config.t) conn ~ids =
            : Order.Request.t)
       and () =
         submit
-          ({ client_order_id = Client_order_id.Generator.next ids
+          ({ client_order_id = Client_order_id.Generator.generate ids
            ; symbol = config.symbol
            ; side = Sell
            ; price = Price.of_int_cents (config.fair_value_cents + offset)
