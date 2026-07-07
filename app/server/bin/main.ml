@@ -25,21 +25,27 @@ let default_symbols =
 ;;
 
 let connect_as ~where_to_connect participant =
-  (* TODO: once login_rpc exists (week 2, exercise 1), dispatch it here so
-     the server knows which participant this connection belongs to. For now
-     we just open the TCP connection. *)
-  ignore participant;
-  Rpc.Connection.client where_to_connect >>| Result.ok_exn
+  let%bind conn = Rpc.Connection.client where_to_connect >>| Result.ok_exn in
+  let%map (_ : Participant.t) =
+    Rpc.Rpc.dispatch_exn
+      Rpc_protocol.login_rpc
+      conn
+      (Participant.to_string participant)
+    >>| ok_exn
+  in
+  conn
 ;;
 
 (* Two market makers per symbol with offset fair values: MM_High's bids cross
    MM_Low's asks every cycle, producing a steady stream of [Fill] /
    [Trade_report] events across multiple symbols for the monitor to render.
 
-   Because [Market_maker.seed_book] always submits Day orders and never
-   cancels, the un-crossable levels (MM_Low's bids and MM_High's asks)
-   accumulate over time — this mode is for short demos, not long-running load
-   tests. *)
+   This mode leaks by design and is for short demos, not long-running load
+   tests: [Market_maker.seed_book] always submits Day orders and never
+   cancels, so the un-crossable levels (MM_Low's bids and MM_High's asks)
+   accumulate in the book every cycle; and since neither participant reads
+   its session feed, the accepts and fills also accumulate unread in the
+   session pipes. *)
 let trade_back_and_forth ~where_to_connect =
   (* One pair of MMs per symbol, anchored at a representative fair value. *)
   let symbol_anchors =
@@ -70,13 +76,20 @@ let trade_back_and_forth ~where_to_connect =
   let mm_high = Participant.of_string "MM_High" in
   let%bind low_conn = connect_as ~where_to_connect mm_low in
   let%bind high_conn = connect_as ~where_to_connect mm_high in
+  (* One generator per participant, shared across every symbol and cycle: the
+     exchange never forgets a used client_order_id, so restarting a generator
+     would get all later submissions rejected as duplicates. *)
+  let low_ids = Client_order_id.Generator.create () in
+  let high_ids = Client_order_id.Generator.create () in
   let configs_for_symbol (symbol, anchor) =
     [ ( low_conn
+      , low_ids
       , make
           ~participant:mm_low
           ~symbol
           ~fair_value_cents:(anchor + low_offset_cents) )
     ; ( high_conn
+      , high_ids
       , make
           ~participant:mm_high
           ~symbol
@@ -85,16 +98,23 @@ let trade_back_and_forth ~where_to_connect =
   in
   let configs = List.concat_map symbol_anchors ~f:configs_for_symbol in
   let cycle () =
-    Deferred.List.iter ~how:`Sequential configs ~f:(fun (conn, config) ->
-      Market_maker.seed_book config conn)
+    Deferred.List.iter
+      ~how:`Sequential
+      configs
+      ~f:(fun (conn, ids, config) -> Market_maker.seed_book config conn ~ids)
   in
   let%map () = cycle () in
   Clock_ns.every cycle_period (fun () -> don't_wait_for (cycle ()))
 ;;
 
-let start ~port ~market_maker_behavior =
+let start ~port ~http_port ~market_maker_behavior =
   let%bind server =
-    Exchange_server.start ~symbols:default_symbols ~port ()
+    Exchange_server.start
+      ?http_port
+      ~http_handler:Jsip_dashboard_assets.handler
+      ~symbols:default_symbols
+      ~port
+      ()
   in
   let where_to_connect =
     Tcp.Where_to_connect.of_host_and_port { host = "localhost"; port }
@@ -114,6 +134,10 @@ let start ~port ~market_maker_behavior =
     [%string
       "JSIP Exchange server listening on port %{Exchange_server.port \
        server#Int}"];
+  (match Exchange_server.http_port server with
+   | None -> ()
+   | Some http_port ->
+     print_endline [%string "Dashboard: http://localhost:%{http_port#Int}"]);
   let symbols =
     List.map default_symbols ~f:Symbol.to_string |> String.concat ~sep:", "
   in
@@ -126,6 +150,13 @@ let () =
     ~summary:"JSIP Exchange server"
     (let%map_open.Command port =
        flag "-port" (required int) ~doc:"PORT port to listen on"
+     and http_port =
+       flag
+         "-http-port"
+         (optional int)
+         ~doc:
+           "PORT also serve the browser dashboard (and RPCs over websocket) \
+            on this port"
      and market_maker_behavior =
        choose_one
          ~if_nothing_chosen:(Default_to `Do_nothing)
@@ -137,6 +168,6 @@ let () =
                 traffic for the monitor"
          ]
      in
-     fun () -> start ~port ~market_maker_behavior)
+     fun () -> start ~port ~http_port ~market_maker_behavior)
   |> Command_unix.run
 ;;

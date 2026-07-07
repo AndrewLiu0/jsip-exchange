@@ -1,0 +1,16 @@
+(library
+ (name jsip_dashboard_assets)
+ (public_name jsip-exchange.jsip_dashboard_assets)
+ (libraries core async cohttp cohttp-async uri)
+ (preprocess
+  (pps ppx_jane)))
+
+; Embed the dashboard's HTML and compiled JS so any server binary that
+; links this library can serve the dashboard without runtime file paths.
+
+(rule
+ (targets dashboard_assets.ml dashboard_assets.mli)
+ (deps
+  (:assets ../client/index.html ../client/main.bc.js))
+ (action
+  (run ocaml-embed-file %{assets} -output dashboard_assets)))

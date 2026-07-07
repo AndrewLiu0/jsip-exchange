@@ -1,0 +1,6 @@
+(library
+ (name jsip_stats_test)
+ (libraries jsip_stats jsip_types jsip_test_harness core)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane)))

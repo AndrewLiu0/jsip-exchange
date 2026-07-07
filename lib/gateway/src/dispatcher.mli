@@ -58,6 +58,24 @@ val clean_up_session : t -> Session.t -> unit Deferred.t
 val set_up_session : t -> Participant.t -> unit Deferred.t
 val register_session : t -> Session.t -> unit Or_error.t
 
+(** {2 Queue-length accessors}
+
+    Inputs to the pipe-occupancy pane of the stats stream (see
+    {!Jsip_stats.Snapshot.Pipe_occupancy}). Each reports, per subscriber
+    pipe, how many events are buffered awaiting the consumer — the number
+    that grows without bound when a subscriber stops reading, because
+    dispatch writes without pushback. Results are sorted by symbol /
+    participant so snapshots are deterministic. *)
+
+(** Per symbol, one length per market-data subscriber pipe. *)
+val market_data_queue_lengths : t -> (Symbol.t * int list) list
+
+(** One length per audit-log subscriber pipe. *)
+val audit_queue_lengths : t -> int list
+
+(** One length per logged-in session's outbound feed. *)
+val session_queue_lengths : t -> (Participant.t * int) list
+
 module For_testing : sig
   val audit_subscriber_count : t -> int
 end

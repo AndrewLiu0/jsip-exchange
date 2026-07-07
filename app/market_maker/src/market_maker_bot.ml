@@ -63,9 +63,7 @@ let skewed_fair_cents (config : Config.t) ctx =
   - (config.state.inventory * config.inventory_skew_cents_per_share)
 ;;
 
-(* TODO(human): implement [inventory_delta].
-
-   Given a fill and this bot's participant, return the signed change to
+(* Given a fill and this bot's participant, return the signed change to
    inventory: positive if this fill increased our position (we bought),
    negative if it decreased it (we sold), and [0] if we were not involved in
    the fill at all.
@@ -97,7 +95,7 @@ let post_ladder (config : Config.t) ctx =
       | Sell -> fair_cents + offset
     in
     let request : Order.Request.t =
-      { client_order_id = Client_order_id.Generator.next config.state.ids
+      { client_order_id = Client_order_id.Generator.generate config.state.ids
       ; symbol = config.symbol
       ; side
       ; price = Price.of_int_cents price_cents

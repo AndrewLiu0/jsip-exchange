@@ -192,12 +192,9 @@ let%expect_test "accepts and cancels maintain the outstanding-order set" =
   return ()
 ;;
 
-(* The two tests below exercise [inventory_delta] and will raise until it is
-   implemented (see the TODO(human) in market_maker_bot.ml). Once it is, run
-   [dune runtest --auto-promote] and read the promoted diff: selling 100 at
-   the ask should leave inventory=-100, cancel ids 1-4, and re-quote 100
-   cents higher (skew of 1 cent/share); the second test's buy-back should
-   return the quotes to the original prices. *)
+(* Selling 100 at the ask should leave inventory=-100, cancel ids 1-4, and
+   re-quote 100 cents higher (skew of 1 cent/share); the second test's
+   buy-back should return the quotes to the original prices. *)
 
 let%expect_test "a fill cancels everything and re-quotes with skew" =
   let config, bot, actions = make_bot () in
