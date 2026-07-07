@@ -9,6 +9,7 @@
   jsip_bot_runtime
   jsip_bots
   jsip_market_maker
+  jsip_dashboard_assets
   core
   async)
  (preprocess

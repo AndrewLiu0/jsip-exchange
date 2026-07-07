@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>jsip exchange — monitor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+
+        --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+
+        --font-size-xs: 11px;
+        --font-size-sm: 13px;
+        --font-size-md: 15px;
+        --font-size-xl: 28px;
+
+        --space-xs: 4px;
+        --space-sm: 8px;
+        --space-md: 12px;
+        --space-lg: 16px;
+        --space-xl: 24px;
+
+        --radius-md: 6px;
+
+        /* Background elevation tiers: 0 = page, 1 = panels. */
+        --color-bg-0: lch(3% 1 260);
+        --color-bg-1: lch(10% 1.5 280);
+        --color-bg-2: lch(15% 1.5 280);
+
+        --color-text-primary: lch(97% 0.5 240);
+        --color-text-secondary: lch(80% 4 250);
+        --color-text-tertiary: lch(58% 4 260);
+
+        --color-border-1: lch(18% 2 260);
+        --color-border-2: lch(26% 1.5 280);
+
+        --color-accent: lch(62% 50 275);
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg-0);
+        color: var(--color-text-primary);
+        font-family: system-ui, sans-serif;
+        font-size: var(--font-size-sm);
+        scrollbar-width: thin;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="main.bc.js"></script>
+  </body>
+</html>

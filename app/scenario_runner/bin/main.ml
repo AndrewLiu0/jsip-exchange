@@ -27,10 +27,17 @@ let command =
          "-seed"
          (optional_with_default 0 int)
          ~doc:"INT random seed for reproducible scenarios (default 0)"
+     and http_port =
+       flag
+         "-http-port"
+         (optional int)
+         ~doc:
+           "PORT also serve the browser dashboard (and RPCs over websocket) \
+            on this port"
      in
      fun () ->
        let config = S.configure () in
-       Runner.run config ~port ~seed)
+       Runner.run ?http_port config ~port ~seed)
     ~behave_nicely_in_pipeline:false
 ;;
 

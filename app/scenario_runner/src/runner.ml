@@ -76,12 +76,24 @@ let start_bot ~where_to_connect ~oracle (Bot_spec.T spec) =
   return ()
 ;;
 
-let run (config : Scenario_config.t) ~port ~seed =
+let run ?http_port (config : Scenario_config.t) ~port ~seed =
   print_endline
     [%string
       "[scenario] starting %{config.name} on port %{port#Int} \
        (seed=%{seed#Int})"];
-  let%bind server = Exchange_server.start ~symbols:config.symbols ~port () in
+  let%bind server =
+    Exchange_server.start
+      ?http_port
+      ~http_handler:Jsip_dashboard_assets.handler
+      ~symbols:config.symbols
+      ~port
+      ()
+  in
+  (match Exchange_server.http_port server with
+   | None -> ()
+   | Some http_port ->
+     print_endline
+       [%string "[scenario] dashboard: http://localhost:%{http_port#Int}"]);
   let where_to_connect =
     Tcp.Where_to_connect.of_host_and_port
       { Host_and_port.host = "localhost"; port }
