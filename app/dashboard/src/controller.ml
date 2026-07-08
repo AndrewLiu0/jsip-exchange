@@ -1,4 +1,5 @@
 open! Core
+open Jsip_types
 open Jsip_stats
 
 module Latency_stats = struct
@@ -12,6 +13,26 @@ module Latency_stats = struct
   [@@deriving sexp_of, compare, equal]
 end
 
+module Reject_totals = struct
+  type t =
+    { order_rejects : (string * int) list
+    ; cancel_rejects : (string * int) list
+    ; order_cancels : (string * int) list
+    }
+  [@@deriving sexp_of, compare, equal]
+end
+
+module Participant_row = struct
+  type t =
+    { resting_orders : int
+    ; resting_shares : Size.t
+    ; submits : int
+    ; cancels : int
+    ; session_queue : int option
+    }
+  [@@deriving sexp_of, compare, equal]
+end
+
 module Display = struct
   type t =
     { memory_series : (Time_ns.Alternate_sexp.t * int) list
@@ -19,6 +40,8 @@ module Display = struct
     ; submit : Latency_stats.t
     ; cancel : Latency_stats.t
     ; occupancy : Snapshot.Pipe_occupancy.t option
+    ; reject_totals : Reject_totals.t
+    ; participants : (Participant.t * Participant_row.t) list
     ; snapshots_received : int
     }
   [@@deriving sexp_of, compare, equal]
@@ -99,6 +122,103 @@ let latency_stats snapshots ~which : Latency_stats.t =
   }
 ;;
 
+(* Sum per-reason counts across the window. Each element of [per_snapshot] is
+   one snapshot's drained (reason, count) list — the same reason can appear
+   in many snapshots, and the result must have exactly one entry per distinct
+   reason carrying the window total. This function also owns the pane's
+   display order: alphabetical by reason and biggest-count-first are both
+   defensible; pick one (ties need a deterministic order either way, or the
+   expect tests flap). *)
+let sum_counts (per_snapshot : (string * int) list list)
+  : (string * int) list
+  =
+  let combined = List.concat per_snapshot in
+  let reason_counts =
+    Map.of_alist_fold (module String) combined ~init:0 ~f:( + )
+  in
+  Map.to_alist reason_counts
+;;
+
+let reject_totals snapshots : Reject_totals.t =
+  let counts which =
+    sum_counts
+      (List.map snapshots ~f:(fun (snapshot : Snapshot.t) ->
+         which snapshot.reject_counts))
+  in
+  { order_rejects =
+      counts (fun (counts : Snapshot.Reject_counts.t) ->
+        counts.order_rejects)
+  ; cancel_rejects =
+      counts (fun (counts : Snapshot.Reject_counts.t) ->
+        counts.cancel_rejects)
+  ; order_cancels =
+      (* Stringified so the pane renders all three families identically. *)
+      counts (fun (counts : Snapshot.Reject_counts.t) ->
+        List.map counts.order_cancels ~f:(fun (reason, count) ->
+          Cancel_reason.to_string reason, count))
+  }
+;;
+
+let participant_rows snapshots ~(latest : Snapshot.t option)
+  : (Participant.t * Participant_row.t) list
+  =
+  (* Counters: submits/cancels summed across every snapshot in the window. *)
+  let activity_totals =
+    List.fold
+      snapshots
+      ~init:Participant.Map.empty
+      ~f:(fun totals (snapshot : Snapshot.t) ->
+        List.fold
+          snapshot.participant_activity
+          ~init:totals
+          ~f:
+            (fun
+              totals
+              ( participant
+              , { Snapshot.Participant_activity.submits; cancels } )
+            ->
+            Map.update totals participant ~f:(fun existing ->
+              let previous_submits, previous_cancels =
+                Option.value existing ~default:(0, 0)
+              in
+              previous_submits + submits, previous_cancels + cancels)))
+  in
+  (* Gauges: resting orders and session-pipe occupancy are levels, read off
+     the newest snapshot only. *)
+  let resting, session_queues =
+    match latest with
+    | None -> Participant.Map.empty, Participant.Map.empty
+    | Some snapshot ->
+      ( Participant.Map.of_alist_exn snapshot.resting_orders
+      , Participant.Map.of_alist_exn snapshot.pipe_occupancy.sessions )
+  in
+  let all_participants =
+    Participant.Set.union_list
+      [ Map.key_set activity_totals
+      ; Map.key_set resting
+      ; Map.key_set session_queues
+      ]
+  in
+  Set.to_list all_participants
+  |> List.map ~f:(fun participant ->
+    let submits, cancels =
+      Option.value (Map.find activity_totals participant) ~default:(0, 0)
+    in
+    let resting_orders, resting_shares =
+      match Map.find resting participant with
+      | None -> 0, Size.zero
+      | Some { Snapshot.Resting_orders.order_count; total_shares } ->
+        order_count, total_shares
+    in
+    ( participant
+    , { Participant_row.resting_orders
+      ; resting_shares
+      ; submits
+      ; cancels
+      ; session_queue = Map.find session_queues participant
+      } ))
+;;
+
 let display t : Display.t =
   let snapshots = Fqueue.to_list t.window in
   let latest = List.last snapshots in
@@ -116,11 +236,14 @@ let display t : Display.t =
   ; occupancy =
       Option.map latest ~f:(fun (snapshot : Snapshot.t) ->
         snapshot.pipe_occupancy)
+  ; reject_totals = reject_totals snapshots
+  ; participants = participant_rows snapshots ~latest
   ; snapshots_received = t.snapshots_received
   }
 ;;
 
 module For_testing = struct
   let percentile = percentile
+  let sum_counts = sum_counts
   let window_length t = Fqueue.length t.window
 end

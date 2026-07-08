@@ -12,23 +12,45 @@
 
 open! Core
 open! Async
+open Jsip_types
 open Jsip_stats
 
 type t
 
 val create : ?max_samples_per_kind:int (** default 1,000 *) -> unit -> t
 
-(** Called by the matching loop once per handled request. O(1); past the cap
-    only the counter moves. *)
-val record_submit_latency : t -> Time_ns.Span.t -> unit
+(** Called by the matching loop once per handled request. Records the latency
+    sample and bumps [participant]'s per-interval activity counter (see
+    {!Jsip_stats.Snapshot.Participant_activity}). O(1); past the sample cap
+    only the counters move. *)
+val record_submit_latency
+  :  t
+  -> participant:Participant.t
+  -> Time_ns.Span.t
+  -> unit
 
-val record_cancel_latency : t -> Time_ns.Span.t -> unit
+val record_cancel_latency
+  :  t
+  -> participant:Participant.t
+  -> Time_ns.Span.t
+  -> unit
+
+(** Called by the matching loop with the events each handled request
+    produced. Counts every [Order_reject], [Cancel_reject], and
+    [Order_cancel] by its reason (see {!Jsip_stats.Snapshot.Reject_counts});
+    other events are ignored. *)
+val record_events : t -> Exchange_event.t list -> unit
 
 (** Everything recorded since the previous [take_*] call, resetting the
     accumulator. Called once per snapshot interval. *)
 val take_submit_latency : t -> Snapshot.Latency.t
 
 val take_cancel_latency : t -> Snapshot.Latency.t
+val take_reject_counts : t -> Snapshot.Reject_counts.t
+
+val take_participant_activity
+  :  t
+  -> (Participant.t * Snapshot.Participant_activity.t) list
 
 (** Register a stats subscriber. Same lifecycle as
     {!Dispatcher.subscribe_audit}: the pipe is dropped from the registry when

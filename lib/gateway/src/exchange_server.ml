@@ -4,6 +4,7 @@ open Jsip_types
 open Jsip_order_book
 open Jsip_stats
 
+(* TODO: module *)
 type action =
   | Submit of Participant.t * Order.Request.t
   | Cancel of Participant.t * Client_order_id.t
@@ -66,20 +67,60 @@ let start_matching_loop
              Matching_engine.submit engine ~participant submit_request
            in
            Dispatcher.dispatch dispatcher events;
+           Stats_recorder.record_events stats_recorder events;
            Stats_recorder.record_submit_latency
              stats_recorder
+             ~participant
              (elapsed_since_received ())
          | Cancel (participant, client_order_id) ->
            let events =
              Matching_engine.cancel engine participant client_order_id
            in
            Dispatcher.dispatch dispatcher events;
+           Stats_recorder.record_events stats_recorder events;
            Stats_recorder.record_cancel_latency
              stats_recorder
+             ~participant
              (elapsed_since_received ())))
 ;;
 
-let build_snapshot ~dispatcher ~stats_recorder ~request_writer : Snapshot.t =
+(* Walk every book and total each participant's resting orders. O(total
+   resting orders) once per stats period — the same cost class as the
+   [Gc.stat] heap walk below, and only at snapshot cadence, never on the
+   matching path. *)
+let resting_orders_by_participant ~engine ~symbols =
+  let totals = Participant.Table.create () in
+  List.iter symbols ~f:(fun symbol ->
+    match Matching_engine.book engine symbol with
+    | None -> ()
+    | Some book ->
+      List.iter Side.all ~f:(fun side ->
+        List.iter (Order_book.orders_on_side book side) ~f:(fun order ->
+          Hashtbl.update totals (Order.participant order) ~f:(fun existing ->
+            let { Snapshot.Resting_orders.order_count; total_shares } =
+              Option.value
+                existing
+                ~default:
+                  { Snapshot.Resting_orders.order_count = 0
+                  ; total_shares = Size.zero
+                  }
+            in
+            { Snapshot.Resting_orders.order_count = order_count + 1
+            ; total_shares =
+                Size.( + ) total_shares (Order.remaining_size order)
+            }))));
+  Hashtbl.to_alist totals
+  |> List.sort ~compare:(fun (p1, _) (p2, _) -> Participant.compare p1 p2)
+;;
+
+let build_snapshot
+  ~engine
+  ~symbols
+  ~dispatcher
+  ~stats_recorder
+  ~request_writer
+  : Snapshot.t
+  =
   (* [Gc.stat] rather than [Gc.quick_stat]: only [stat] reports [live_words].
      It walks the heap to compute it — fine at the stats cadence, not
      something to call in a hot loop. *)
@@ -93,6 +134,10 @@ let build_snapshot ~dispatcher ~stats_recorder ~request_writer : Snapshot.t =
       ; audit = Dispatcher.audit_queue_lengths dispatcher
       ; sessions = Dispatcher.session_queue_lengths dispatcher
       }
+  ; reject_counts = Stats_recorder.take_reject_counts stats_recorder
+  ; participant_activity =
+      Stats_recorder.take_participant_activity stats_recorder
+  ; resting_orders = resting_orders_by_participant ~engine ~symbols
   }
 ;;
 
@@ -236,7 +281,12 @@ let start
     (fun () ->
        Stats_recorder.publish
          stats_recorder
-         (build_snapshot ~dispatcher ~stats_recorder ~request_writer));
+         (build_snapshot
+            ~engine
+            ~symbols
+            ~dispatcher
+            ~stats_recorder
+            ~request_writer));
   { engine
   ; dispatcher
   ; request_writer

@@ -3,6 +3,7 @@
     form; the RPC itself ships bin_io). *)
 
 open! Core
+open Jsip_types
 open Jsip_test_harness
 open Jsip_stats
 
@@ -13,13 +14,13 @@ let sample_snapshot : Snapshot.t =
   in
   { time
   ; memory =
-      { live_words = 50_000
-      ; heap_words = 120_000
-      ; top_heap_words = 150_000
-      ; minor_collections = 42
-      ; major_collections = 3
-      ; compactions = 0
-      }
+      Snapshot.Memory.For_testing.create
+        ~live_words:50_000
+        ~heap_words:120_000
+        ~top_heap_words:150_000
+        ~minor_collections:42
+        ~major_collections:3
+        ~compactions:0
   ; submit_latency =
       { samples = Array.map [| 120; 450; 90 |] ~f:Time_ns.Span.of_int_us
       ; total_count = 3
@@ -31,6 +32,14 @@ let sample_snapshot : Snapshot.t =
       ; audit = [ 5 ]
       ; sessions = [ Harness.alice, 1 ]
       }
+  ; reject_counts =
+      { order_rejects = [ "rate limit exceeded", 4 ]
+      ; cancel_rejects = [ "order not found", 1 ]
+      ; order_cancels = [ Cancel_reason.Ioc_remainder, 2 ]
+      }
+  ; participant_activity = [ Harness.alice, { submits = 7; cancels = 1 } ]
+  ; resting_orders =
+      [ Harness.alice, { order_count = 3; total_shares = Size.of_int 450 } ]
   }
 ;;
 
@@ -49,7 +58,13 @@ let%expect_test "snapshot sexp round-trips" =
      (cancel_latency ((samples ()) (total_count 0)))
      (pipe_occupancy
       ((request_queue 2) (market_data ((AAPL (0 17)))) (audit (5))
-       (sessions ((Alice 1))))))
+       (sessions ((Alice 1)))))
+     (reject_counts
+      ((order_rejects (("rate limit exceeded" 4)))
+       (cancel_rejects (("order not found" 1)))
+       (order_cancels ((Ioc_remainder 2)))))
+     (participant_activity ((Alice ((submits 7) (cancels 1)))))
+     (resting_orders ((Alice ((order_count 3) (total_shares 450))))))
     true
     |}]
 ;;

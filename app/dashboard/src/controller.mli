@@ -12,6 +12,7 @@
     and fully deterministic under test. *)
 
 open! Core
+open Jsip_types
 open Jsip_stats
 
 module Latency_stats : sig
@@ -31,6 +32,35 @@ module Latency_stats : sig
   [@@deriving sexp_of, compare, equal]
 end
 
+module Reject_totals : sig
+  (** Reject/cancel reason counts summed across the whole window — "how many
+      times did each reason fire in the last ~60s". [order_cancels] keys are
+      stringified {!Cancel_reason.t}s so all three families render alike. *)
+  type t =
+    { order_rejects : (string * int) list
+    ; cancel_rejects : (string * int) list
+    ; order_cancels : (string * int) list
+    }
+  [@@deriving sexp_of, compare, equal]
+end
+
+module Participant_row : sig
+  (** One participant's resource usage. Gauge fields ([resting_orders],
+      [resting_shares], [session_queue]) are read off the {e newest} snapshot
+      — summing a level across time is meaningless; counter fields
+      ([submits], [cancels]) are summed across the window, i.e. "in the last
+      ~60s". [session_queue] is [None] when the participant has no logged-in
+      session (resting orders can outlive a disconnect). *)
+  type t =
+    { resting_orders : int
+    ; resting_shares : Size.t
+    ; submits : int
+    ; cancels : int
+    ; session_queue : int option
+    }
+  [@@deriving sexp_of, compare, equal]
+end
+
 module Display : sig
   (** Pure view-model, one field per pane. Decoupled from any Bonsai type so
       rendering functions are plain [Display.t -> Vdom.Node.t]. *)
@@ -42,6 +72,10 @@ module Display : sig
     ; submit : Latency_stats.t
     ; cancel : Latency_stats.t
     ; occupancy : Snapshot.Pipe_occupancy.t option (** Latest snapshot's. *)
+    ; reject_totals : Reject_totals.t
+    ; participants : (Participant.t * Participant_row.t) list
+    (** Sorted by participant: everyone with any activity, resting order, or
+        session anywhere in the window. *)
     ; snapshots_received : int
     (** Lifetime count, not windowed — a liveness indicator. *)
     }
@@ -67,6 +101,10 @@ module For_testing : sig
   (** The percentile function used by {!display}; exposed so tests can pin
       its exact semantics on hand-picked sample sets. *)
   val percentile : Time_ns.Span.t array -> p:float -> Time_ns.Span.t option
+
+  (** The per-reason summing used by {!display} for {!Reject_totals}; exposed
+      so tests can pin its totals and its display order. *)
+  val sum_counts : (string * int) list list -> (string * int) list
 
   (** Snapshots currently in the window (post-eviction). *)
   val window_length : t -> int

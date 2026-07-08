@@ -199,12 +199,94 @@ let render_occupancy_pane (occupancy : Snapshot.Pipe_occupancy.t option) =
   {%html|<Pane.view ~title:%{"pipe occupancy"}> *{body} </>|}
 ;;
 
+(* Rejection counts summed over the window. Reasons the operator has never
+   seen render as nothing rather than zero rows: the reason space is
+   open-ended (reject reasons are free-form strings), so there is no fixed
+   set to enumerate. *)
+let render_rejects_pane (totals : Controller.Reject_totals.t) =
+  let { Controller.Reject_totals.order_rejects
+      ; cancel_rejects
+      ; order_cancels
+      }
+    =
+    totals
+  in
+  let row (reason, count) =
+    {%html|
+      <div %{Styles.stat_row}>
+        <span %{Styles.stat_label}>#{reason}</span>
+        <span %{Styles.stat_number}>#{format_count count}</span>
+      </div>
+    |}
+  in
+  let section label counts =
+    {%html|<div %{Styles.section_label}>#{label}</div>|}
+    ::
+    (match counts with
+     | [] -> [ {%html|<div %{Styles.muted}>none</div>|} ]
+     | counts -> List.map counts ~f:row)
+  in
+  let body =
+    List.concat
+      [ section "order rejects" order_rejects
+      ; section "cancel rejects" cancel_rejects
+      ; section "order cancels" order_cancels
+      ]
+  in
+  {%html|<Pane.view ~title:%{"rejects — last 60s"}> *{body} </>|}
+;;
+
+let render_participants_pane
+  (participants : (Participant.t * Controller.Participant_row.t) list)
+  =
+  let body =
+    match participants with
+    | [] -> [ {%html|<div %{Styles.muted}>no participants yet…</div>|} ]
+    | participants ->
+      List.concat_map participants ~f:(fun (participant, row) ->
+        let { Controller.Participant_row.resting_orders
+            ; resting_shares
+            ; submits
+            ; cancels
+            ; session_queue
+            }
+          =
+          row
+        in
+        let stat_row label value =
+          {%html|
+              <div %{Styles.stat_row}>
+                <span %{Styles.stat_label}>#{label}</span>
+                <span %{Styles.stat_number}>#{value}</span>
+              </div>
+            |}
+        in
+        [ {%html|<div %{Styles.section_label}>#{Participant.to_string participant}</div>|}
+        ; stat_row
+            "resting orders"
+            [%string
+              "%{format_count resting_orders} (%{format_count (Size.to_int \
+               resting_shares)} shares)"]
+        ; stat_row "submits (60s)" (format_count submits)
+        ; stat_row "cancels (60s)" (format_count cancels)
+        ; stat_row
+            "session queue"
+            (match session_queue with
+             | None -> "no session"
+             | Some length -> format_count length)
+        ])
+  in
+  {%html|<Pane.view ~title:%{"participants"}> *{body} </>|}
+;;
+
 let render_page (display : Controller.Display.t) =
   let { Controller.Display.memory_series
       ; latest_memory
       ; submit
       ; cancel
       ; occupancy
+      ; reject_totals
+      ; participants
       ; snapshots_received
       }
     =
@@ -226,6 +308,8 @@ let render_page (display : Controller.Display.t) =
         %{render_latency_pane ~title:"submit latency" submit}
         %{render_latency_pane ~title:"cancel latency" cancel}
         %{render_occupancy_pane occupancy}
+        %{render_rejects_pane reject_totals}
+        %{render_participants_pane participants}
       </div>
       <footer %{Styles.footer}>#{liveness}</footer>
     </div>

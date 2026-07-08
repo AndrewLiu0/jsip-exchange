@@ -21,6 +21,25 @@ module Memory = struct
     ; compactions = stat.compactions
     }
   ;;
+
+  module For_testing = struct
+    let create
+      ~live_words
+      ~heap_words
+      ~top_heap_words
+      ~minor_collections
+      ~major_collections
+      ~compactions
+      =
+      { live_words
+      ; heap_words
+      ; top_heap_words
+      ; minor_collections
+      ; major_collections
+      ; compactions
+      }
+    ;;
+  end
 end
 
 module Latency = struct
@@ -31,6 +50,33 @@ module Latency = struct
   [@@deriving sexp, bin_io, compare, equal]
 
   let empty = { samples = [||]; total_count = 0 }
+end
+
+module Reject_counts = struct
+  type t =
+    { order_rejects : (string * int) list
+    ; cancel_rejects : (string * int) list
+    ; order_cancels : (Cancel_reason.t * int) list
+    }
+  [@@deriving sexp, bin_io, compare, equal]
+
+  let empty = { order_rejects = []; cancel_rejects = []; order_cancels = [] }
+end
+
+module Participant_activity = struct
+  type t =
+    { submits : int
+    ; cancels : int
+    }
+  [@@deriving sexp, bin_io, compare, equal]
+end
+
+module Resting_orders = struct
+  type t =
+    { order_count : int
+    ; total_shares : Size.t
+    }
+  [@@deriving sexp, bin_io, compare, equal]
 end
 
 module Pipe_occupancy = struct
@@ -49,5 +95,8 @@ type t =
   ; submit_latency : Latency.t
   ; cancel_latency : Latency.t
   ; pipe_occupancy : Pipe_occupancy.t
+  ; reject_counts : Reject_counts.t
+  ; participant_activity : (Participant.t * Participant_activity.t) list
+  ; resting_orders : (Participant.t * Resting_orders.t) list
   }
 [@@deriving sexp, bin_io, compare, equal]

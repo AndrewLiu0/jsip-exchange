@@ -2,6 +2,7 @@
     fixed timestamps go in, the {!Controller.Display.t} sexp comes out. *)
 
 open! Core
+open Jsip_types
 open Jsip_stats
 open Jsip_dashboard
 
@@ -14,6 +15,10 @@ let snapshot
   ?submit_total
   ?(cancel_us = [])
   ?(live_words = 1_000)
+  ?(rejects = Snapshot.Reject_counts.empty)
+  ?(activity = [])
+  ?(resting = [])
+  ?(sessions = [])
   ~at_sec
   ()
   : Snapshot.t
@@ -25,19 +30,25 @@ let snapshot
   in
   { time = time_at ~sec:at_sec
   ; memory =
-      { live_words
-      ; heap_words = 0
-      ; top_heap_words = 0
-      ; minor_collections = 0
-      ; major_collections = 0
-      ; compactions = 0
-      }
+      Snapshot.Memory.For_testing.create
+        ~live_words
+        ~heap_words:0
+        ~top_heap_words:0
+        ~minor_collections:0
+        ~major_collections:0
+        ~compactions:0
   ; submit_latency = latency submit_us ~total:submit_total
   ; cancel_latency = latency cancel_us ~total:None
   ; pipe_occupancy =
-      { request_queue = 0; market_data = []; audit = []; sessions = [] }
+      { request_queue = 0; market_data = []; audit = []; sessions }
+  ; reject_counts = rejects
+  ; participant_activity = activity
+  ; resting_orders = resting
   }
 ;;
+
+let alice = Participant.of_string "Alice"
+let bob = Participant.of_string "Bob"
 
 let feed_all snapshots =
   List.fold
@@ -59,7 +70,9 @@ let%expect_test "an empty controller displays an empty dashboard" =
       ((p50 ()) (p90 ()) (p99 ()) (window_sample_count 0) (window_total_count 0)))
      (cancel
       ((p50 ()) (p90 ()) (p99 ()) (window_sample_count 0) (window_total_count 0)))
-     (occupancy ()) (snapshots_received 0))
+     (occupancy ())
+     (reject_totals ((order_rejects ()) (cancel_rejects ()) (order_cancels ())))
+     (participants ()) (snapshots_received 0))
     |}]
 ;;
 
@@ -87,7 +100,8 @@ let%expect_test "percentiles over a known sample set" =
      (cancel
       ((p50 ()) (p90 ()) (p99 ()) (window_sample_count 0) (window_total_count 0)))
      (occupancy (((request_queue 0) (market_data ()) (audit ()) (sessions ()))))
-     (snapshots_received 1))
+     (reject_totals ((order_rejects ()) (cancel_rejects ()) (order_cancels ())))
+     (participants ()) (snapshots_received 1))
     |}]
 ;;
 
@@ -115,7 +129,8 @@ let%expect_test "percentiles pool samples across the window" =
      (cancel
       ((p50 ()) (p90 ()) (p99 ()) (window_sample_count 0) (window_total_count 0)))
      (occupancy (((request_queue 0) (market_data ()) (audit ()) (sessions ()))))
-     (snapshots_received 2))
+     (reject_totals ((order_rejects ()) (cancel_rejects ()) (order_cancels ())))
+     (participants ()) (snapshots_received 2))
     |}]
 ;;
 
@@ -139,7 +154,75 @@ let%expect_test "server-side truncation surfaces in window_total_count" =
      (cancel
       ((p50 ()) (p90 ()) (p99 ()) (window_sample_count 0) (window_total_count 0)))
      (occupancy (((request_queue 0) (market_data ()) (audit ()) (sessions ()))))
-     (snapshots_received 1))
+     (reject_totals ((order_rejects ()) (cancel_rejects ()) (order_cancels ())))
+     (participants ()) (snapshots_received 1))
+    |}]
+;;
+
+let%expect_test "sum_counts totals each reason across the window" =
+  (* "rate limit exceeded" fires in two different snapshots and must come
+     back as one entry with the window total; an empty interval contributes
+     nothing.
+
+     This expected value is written by hand, not promoted: the test is a
+     specification, in the same spirit as the eviction test below. It fails
+     (printing []) until [Controller.sum_counts] is implemented. The order
+     shown here is alphabetical by reason — if you pick biggest-count-first
+     instead, update this expectation with [--auto-promote] and read the
+     diff. *)
+  print_s
+    [%sexp
+      (Controller.For_testing.sum_counts
+         [ [ "duplicate client order id", 1; "rate limit exceeded", 2 ]
+         ; []
+         ; [ "rate limit exceeded", 3; "unknown symbol", 1 ]
+         ]
+       : (string * int) list)];
+  [%expect
+    {|
+    (("duplicate client order id" 1) ("rate limit exceeded" 5)
+     ("unknown symbol" 1))
+    |}]
+;;
+
+let%expect_test "participant rows join window counters with latest gauges" =
+  (* Alice submits in both intervals (counter: summed to 3) and holds two
+     resting orders in the newest snapshot (gauge: NOT summed with the older
+     snapshot's value — the older reading is deliberately different to prove
+     it is ignored). Bob appears only via a session with a backed-up pipe, so
+     his row exists with zero activity — exactly how a slow-consumer-only
+     participant shows up. *)
+  let controller =
+    feed_all
+      [ snapshot
+          ~at_sec:0
+          ~activity:[ alice, { submits = 2; cancels = 1 } ]
+          ~resting:
+            [ alice, { order_count = 9; total_shares = Size.of_int 900 } ]
+          ()
+      ; snapshot
+          ~at_sec:1
+          ~activity:[ alice, { submits = 1; cancels = 0 } ]
+          ~resting:
+            [ alice, { order_count = 2; total_shares = Size.of_int 250 } ]
+          ~sessions:[ alice, 0; bob, 47 ]
+          ()
+      ]
+  in
+  let { Controller.Display.participants; _ } =
+    Controller.display controller
+  in
+  print_s
+    [%sexp
+      (participants : (Participant.t * Controller.Participant_row.t) list)];
+  [%expect
+    {|
+    ((Alice
+      ((resting_orders 2) (resting_shares 250) (submits 3) (cancels 1)
+       (session_queue (0))))
+     (Bob
+      ((resting_orders 0) (resting_shares 0) (submits 0) (cancels 0)
+       (session_queue (47)))))
     |}]
 ;;
 
