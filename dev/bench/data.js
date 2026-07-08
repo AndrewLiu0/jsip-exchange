@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1783448936766,
+  "lastUpdate": 1783523641370,
   "repoUrl": "https://github.com/AndrewLiu0/jsip-exchange",
   "entries": {
     "Order book benchmark": [
@@ -3724,6 +3724,155 @@ window.BENCHMARK_DATA = {
           {
             "name": "find_match_alloc (n=100)",
             "value": 28.753530760042715,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "an6reww@gmail.com",
+            "name": "Andrew",
+            "username": "AndrewLiu0"
+          },
+          "committer": {
+            "email": "an6reww@gmail.com",
+            "name": "Andrew",
+            "username": "AndrewLiu0"
+          },
+          "distinct": true,
+          "id": "b18dbf9b2f65c8991aa8af6455b586987caa8532",
+          "message": "Add reject-reason counters and per-participant usage stats. Claude wrote the excahnge-side plumbing and dashboard panes. Reviewed.",
+          "timestamp": "2026-07-08T15:09:00Z",
+          "tree_id": "3725d154905698bc4c2f0b7d01c64d1f87140e79",
+          "url": "https://github.com/AndrewLiu0/jsip-exchange/commit/b18dbf9b2f65c8991aa8af6455b586987caa8532"
+        },
+        "date": 1783523640396,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "find_match (n=10)",
+            "value": 26.813805261754805,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match (n=50)",
+            "value": 27.770223180904757,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match (n=100)",
+            "value": 28.675377354803736,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match (n=500)",
+            "value": 31.366747214473946,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match_miss (n=10)",
+            "value": 26.46398864622398,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match_miss (n=50)",
+            "value": 27.92336353960092,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match_miss (n=100)",
+            "value": 28.850537017089646,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match_miss (n=500)",
+            "value": 31.29913449252861,
+            "unit": "ns"
+          },
+          {
+            "name": "best_bid_offer (n=10)",
+            "value": 54.350709682551546,
+            "unit": "ns"
+          },
+          {
+            "name": "best_bid_offer (n=50)",
+            "value": 64.4292934416684,
+            "unit": "ns"
+          },
+          {
+            "name": "best_bid_offer (n=100)",
+            "value": 69.72827973293397,
+            "unit": "ns"
+          },
+          {
+            "name": "best_bid_offer (n=500)",
+            "value": 86.18651932568413,
+            "unit": "ns"
+          },
+          {
+            "name": "add+remove (n=100)",
+            "value": 608.6715823823406,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_cross (n=10)",
+            "value": 102.3650537133952,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_cross (n=50)",
+            "value": 153.29730204355548,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_cross (n=100)",
+            "value": 175.94424017489578,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_cross (n=500)",
+            "value": 229.30279193187252,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_miss (n=10)",
+            "value": 61.212170599732715,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_miss (n=50)",
+            "value": 87.45242656078946,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_miss (n=100)",
+            "value": 96.17678020996247,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_ioc_miss (n=500)",
+            "value": 138.8530902974018,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_sweep_10_levels",
+            "value": 6513.994833716734,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_sweep_50_levels",
+            "value": 43502.976261376534,
+            "unit": "ns"
+          },
+          {
+            "name": "submit_sweep_100_levels",
+            "value": 102418.918731126,
+            "unit": "ns"
+          },
+          {
+            "name": "find_match_alloc (n=100)",
+            "value": 30.282523508873208,
             "unit": "ns"
           }
         ]
