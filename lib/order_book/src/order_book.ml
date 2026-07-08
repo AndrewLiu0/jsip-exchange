@@ -98,11 +98,6 @@ let find_best_order t side =
   Order_queue.first best_queue
 ;;
 
-(* NOTE: This walks the list front-to-back and returns the *first* tradable
-   order, not the best-priced one. Orders are in reverse insertion order
-   (newest first), so this matches against whatever was most recently added,
-   regardless of price. See test_matching_engine.ml for a test that
-   demonstrates why this is wrong. *)
 let find_match t incoming : Order.t option =
   let incoming_side = Order.side incoming in
   let opposite_side = Side.flip incoming_side in
