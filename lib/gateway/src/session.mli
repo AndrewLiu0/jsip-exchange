@@ -15,10 +15,14 @@ open Jsip_types
 
 type t
 
-val create : Participant.t -> t
+val create : Participant.t -> participant_id:Participant_id.t -> t
 
 (** The participant this session belongs to. *)
 val participant : t -> Participant.t
+
+(** The server-local id interned for this participant at login; the
+    dispatcher keys its session table by it. *)
+val participant_id : t -> Participant_id.t
 
 (** Hand the reader to the client (via [session_feed_rpc]). Returns the same
     reader every time it's called — there is only one outbound stream per

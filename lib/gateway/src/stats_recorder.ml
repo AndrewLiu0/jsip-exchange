@@ -52,12 +52,13 @@ type t =
   ; order_rejects : int String.Table.t
   ; cancel_rejects : int String.Table.t
   ; order_cancels : (Cancel_reason.t, int) Hashtbl.t
-  ; activity : Activity.t Participant.Table.t
+  ; registry : Participant_id.Registry.t
+  ; activity : (Participant_id.t, Activity.t) Hashtbl.t
   }
 
 let default_max_samples_per_kind = 1_000
 
-let create ?(max_samples_per_kind = default_max_samples_per_kind) () =
+let create ?(max_samples_per_kind = default_max_samples_per_kind) registry =
   { submit = Series.create ()
   ; cancel = Series.create ()
   ; max_samples_per_kind
@@ -65,12 +66,16 @@ let create ?(max_samples_per_kind = default_max_samples_per_kind) () =
   ; order_rejects = String.Table.create ()
   ; cancel_rejects = String.Table.create ()
   ; order_cancels = Hashtbl.create (module Cancel_reason)
-  ; activity = Participant.Table.create ()
+  ; registry
+  ; activity = Hashtbl.create (module Participant_id)
   }
 ;;
 
+(* [intern], not [find]: latencies are only recorded for logged-in
+   requesters, but interning is idempotent and additive either way. *)
 let find_activity t participant =
-  Hashtbl.find_or_add t.activity participant ~default:(fun () ->
+  let id = Participant_id.Registry.intern t.registry participant in
+  Hashtbl.find_or_add t.activity id ~default:(fun () ->
     { Activity.submits = 0; cancels = 0 })
 ;;
 
@@ -130,11 +135,14 @@ let take_reject_counts t : Snapshot.Reject_counts.t =
   }
 ;;
 
+(* The snapshot speaks names: resolve ids back through the registry at this
+   edge, and keep the name-sorted order the wire format promises. *)
 let take_participant_activity t =
   let activity =
     Hashtbl.to_alist t.activity
-    |> List.map ~f:(fun (participant, activity) ->
-      participant, Activity.to_snapshot activity)
+    |> List.map ~f:(fun (id, activity) ->
+      ( Participant_id.Registry.name t.registry id
+      , Activity.to_snapshot activity ))
     |> List.sort ~compare:(fun (p1, _) (p2, _) -> Participant.compare p1 p2)
   in
   Hashtbl.clear t.activity;

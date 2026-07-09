@@ -16,7 +16,7 @@ let print_latency (latency : Snapshot.Latency.t) =
 ;;
 
 let%expect_test "take returns what was recorded, then resets" =
-  let recorder = Stats_recorder.create () in
+  let recorder = Stats_recorder.create (Participant_id.Registry.create ()) in
   Stats_recorder.record_submit_latency
     recorder
     ~participant:Harness.alice
@@ -43,7 +43,11 @@ let%expect_test "take returns what was recorded, then resets" =
 ;;
 
 let%expect_test "past the cap, samples stop but the count keeps going" =
-  let recorder = Stats_recorder.create ~max_samples_per_kind:3 () in
+  let recorder =
+    Stats_recorder.create
+      ~max_samples_per_kind:3
+      (Participant_id.Registry.create ())
+  in
   List.iter [ 1; 2; 3; 4; 5 ] ~f:(fun us ->
     Stats_recorder.record_submit_latency
       recorder
@@ -55,7 +59,7 @@ let%expect_test "past the cap, samples stop but the count keeps going" =
 ;;
 
 let%expect_test "activity is counted per participant, then reset by take" =
-  let recorder = Stats_recorder.create () in
+  let recorder = Stats_recorder.create (Participant_id.Registry.create ()) in
   (* Two submits and a cancel for Alice, one submit for Bob. Latency spans
      are irrelevant here — zero keeps the focus on the counts. *)
   let zero = Time_ns.Span.zero in
@@ -90,7 +94,7 @@ let%expect_test "activity is counted per participant, then reset by take" =
 ;;
 
 let%expect_test "events are counted by reject/cancel reason, then reset" =
-  let recorder = Stats_recorder.create () in
+  let recorder = Stats_recorder.create (Participant_id.Registry.create ()) in
   let request = Harness.buy ~price_cents:10_000 () in
   let reject reason : Exchange_event.t =
     Order_reject { participant = Harness.alice; request; reason }
@@ -164,7 +168,7 @@ let empty_snapshot : Snapshot.t =
 ;;
 
 let%expect_test "subscribers receive published snapshots" =
-  let recorder = Stats_recorder.create () in
+  let recorder = Stats_recorder.create (Participant_id.Registry.create ()) in
   let reader = Stats_recorder.subscribe recorder in
   Stats_recorder.publish recorder empty_snapshot;
   let%bind read_result = Pipe.read reader in

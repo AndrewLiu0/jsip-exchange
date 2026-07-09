@@ -17,7 +17,13 @@ open Jsip_stats
 
 type t
 
-val create : ?max_samples_per_kind:int (** default 1,000 *) -> unit -> t
+(** The registry is shared with the rest of the server: per-participant
+    activity is keyed by {!Participant_id.t} internally and resolved back to
+    names when a snapshot is taken. *)
+val create
+  :  ?max_samples_per_kind:int (** default 1,000 *)
+  -> Participant_id.Registry.t
+  -> t
 
 (** Called by the matching loop once per handled request. Records the latency
     sample and bumps [participant]'s per-interval activity counter (see

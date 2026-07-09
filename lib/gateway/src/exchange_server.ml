@@ -165,8 +165,11 @@ let start
   ()
   =
   let engine = Matching_engine.create symbols in
-  let dispatcher = Dispatcher.create () in
-  let stats_recorder = Stats_recorder.create () in
+  (* One registry for the whole server: dispatcher and stats recorder key
+     their participant tables by the ids it mints at login. *)
+  let registry = Participant_id.Registry.create () in
+  let dispatcher = Dispatcher.create registry in
+  let stats_recorder = Stats_recorder.create registry in
   (* request_writer: network RPC handlers write incoming client requests here
      request_reader: the backend exexution engine consumes requests from this
      stream
@@ -185,7 +188,10 @@ let start
                then return (Or_error.error_string "Invalid participant name")
                else (
                  let participant = Participant.of_string trimmed in
-                 let session = Session.create participant in
+                 let participant_id =
+                   Participant_id.Registry.intern registry participant
+                 in
+                 let session = Session.create participant ~participant_id in
                  match Dispatcher.register_session dispatcher session with
                  | Ok () ->
                    state.session <- Some session;

@@ -21,11 +21,12 @@ type t
 
 (** Create a dispatcher.
 
-    Events whose audience is a single participant (order-lifecycle responses
-    and [Fill] events) are currently handed to a stub [push_to_session] that
-    prints them on stdout, prefixed with the target participant. Wiring this
-    up to real [Session] outbound pipes is a week-2 exercise. *)
-val create : unit -> t
+    The registry is shared with the rest of the server: session routing is
+    keyed by {!Participant_id.t}, so dispatching an event resolves the
+    participant name it carries to an id first. Events for a participant with
+    no live session fall back to stdout (the server binary prints them; tests
+    silence them). *)
+val create : Participant_id.Registry.t -> t
 
 (** Subscribe to public market data for one or more [symbols]. The same pipe
     receives events for every requested symbol; the dispatcher avoids
@@ -55,7 +56,6 @@ val subscribe_audit : t -> Exchange_event.t Pipe.Reader.t
 val dispatch : t -> Exchange_event.t list -> unit
 
 val clean_up_session : t -> Session.t -> unit Deferred.t
-val set_up_session : t -> Participant.t -> unit Deferred.t
 val register_session : t -> Session.t -> unit Or_error.t
 
 (** {2 Queue-length accessors}

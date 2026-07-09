@@ -6,13 +6,15 @@ type t =
   { market_data_subscribers_by_symbol :
       Exchange_event.t Pipe.Writer.t Bag.t Symbol.Table.t
   ; audit_subscribers : Exchange_event.t Pipe.Writer.t Bag.t
-  ; participant_to_session : Session.t Participant.Table.t
+  ; registry : Participant_id.Registry.t
+  ; id_to_session : (Participant_id.t, Session.t) Hashtbl.t
   }
 
-let create () =
+let create registry =
   { market_data_subscribers_by_symbol = Symbol.Table.create ()
   ; audit_subscribers = Bag.create ()
-  ; participant_to_session = Participant.Table.create ()
+  ; registry
+  ; id_to_session = Hashtbl.create (module Participant_id)
   }
 ;;
 
@@ -64,42 +66,33 @@ let push_audit t event =
 ;;
 
 let clean_up_session t session =
-  let participant = Session.participant session in
-  Hashtbl.remove t.participant_to_session participant;
+  Hashtbl.remove t.id_to_session (Session.participant_id session);
   return (Session.close session)
-;;
-
-let set_up_session t participant =
-  let%bind () =
-    match Hashtbl.find t.participant_to_session participant with
-    | Some session -> clean_up_session t session
-    | None -> return ()
-  in
-  Hashtbl.add_exn
-    t.participant_to_session
-    ~key:participant
-    ~data:(Session.create participant);
-  return ()
 ;;
 
 (* Helper for exchange_server login *)
 let register_session t session =
-  let participant = Session.participant session in
-  if Hashtbl.mem t.participant_to_session participant
+  let participant_id = Session.participant_id session in
+  if Hashtbl.mem t.id_to_session participant_id
   then Or_error.error_string "Participant already logged onto exchange"
   else (
-    Hashtbl.set t.participant_to_session ~key:participant ~data:session;
+    Hashtbl.set t.id_to_session ~key:participant_id ~data:session;
     Ok ())
 ;;
 
+(* Events carry participant names (the engine speaks names), so routing
+   resolves name -> id -> session. [Registry.find], not [intern]: a
+   participant who never logged in (e.g. seeded engine-side) should not be
+   assigned an id just because an event mentions them. *)
 let push_to_session t participant event =
-  (* TODO: Once sessions have been implemented this function should write the
-     event to the appropriate session's pipe. For now we have the server
-     binary print these events to stdout while tests can silence them. *)
-  match Hashtbl.find t.participant_to_session participant with
+  let session =
+    let open Option.Let_syntax in
+    let%bind id = Participant_id.Registry.find t.registry participant in
+    Hashtbl.find t.id_to_session id
+  in
+  match session with
   | Some session -> Session.push session event
   | None ->
-    ();
     print_endline
       [%string
         "[for %{participant#Participant}] %{Protocol.format_event event}"]
@@ -161,9 +154,9 @@ let audit_queue_lengths t =
 ;;
 
 let session_queue_lengths t =
-  Hashtbl.to_alist t.participant_to_session
-  |> List.map ~f:(fun (participant, session) ->
-    participant, Session.queue_length session)
+  Hashtbl.data t.id_to_session
+  |> List.map ~f:(fun session ->
+    Session.participant session, Session.queue_length session)
   |> List.sort ~compare:(fun (p1, _) (p2, _) -> Participant.compare p1 p2)
 ;;
 

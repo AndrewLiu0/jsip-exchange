@@ -6,7 +6,7 @@ type t =
   { symbol : Symbol.t
   ; mutable bids : Order.t Order_queue.t Price.Map.t
   ; mutable asks : Order.t Order_queue.t Price.Map.t
-  ; mutable id_to_order : Order.t Order_id.Map.t
+  ; mutable id_to_order : Order.t Order_id.Map.t (*Can make Hashtable? *)
   }
 [@@deriving sexp_of]
 
