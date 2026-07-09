@@ -1,0 +1,13 @@
+Estimated testing time 40s (8 benchmarks x 5s). Change using '-quota'.
+                                                               
+  Name                        Time/Run   mWd/Run   Percentage  
+ --------------------------- ---------- --------- ------------ 
+  book_hit (symbols=10)       102.31ns     7.00w      100.00%  
+  book_miss (symbols=10)       35.71ns     3.00w       34.91%  
+  book_hit (symbols=100)       61.54ns     7.00w       60.15%  
+  book_miss (symbols=100)      57.57ns     3.00w       56.27%  
+  book_hit (symbols=1000)      84.84ns     7.00w       82.93%  
+  book_miss (symbols=1000)     41.16ns     3.00w       40.23%  
+  book_hit (symbols=10000)     83.48ns     7.00w       81.60%  
+  book_miss (symbols=10000)    57.23ns     3.00w       55.94%  
+                                                               

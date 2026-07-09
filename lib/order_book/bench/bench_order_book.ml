@@ -280,6 +280,37 @@ let bench_submit_sweep ~n =
 ;;
 
 (* ---------------------------------------------------------------- *)
+(* Symbol-lookup benchmarks (Part 4, Ex 2) *)
+(* ---------------------------------------------------------------- *)
+
+(* Symbol counts get their own sweep: [sizes] above counts resting orders,
+   whereas the symbol lookup only becomes visible with many symbols. *)
+let symbol_counts = [ 10; 100; 1_000; 10_000 ]
+let symbol_of_index i = Symbol.of_string [%string "SYM%{i#Int}"]
+
+(** Engine trading [k] symbols, all books empty: [Matching_engine.book] is
+    then a pure symbol-resolution measurement, not buried under matching
+    work. The benchmarks in [tests] are all single-symbol, so they never
+    stress this lookup. *)
+let bench_symbol_lookup ~k =
+  let engine = Matching_engine.create (List.init k ~f:symbol_of_index) in
+  (* Probes prebuilt outside the thunks. The miss shares the "SYM" prefix
+     with every traded symbol, so its comparisons pay realistic prefix walks
+     instead of bailing on the first character. *)
+  let hit = symbol_of_index (k / 2) in
+  let miss = symbol_of_index k in
+  [ Bench.Test.create
+      ~name:[%string "book_hit (symbols=%{k#Int})"]
+      (fun () ->
+         ignore (Matching_engine.book engine hit : Order_book.t option))
+  ; Bench.Test.create
+      ~name:[%string "book_miss (symbols=%{k#Int})"]
+      (fun () ->
+         ignore (Matching_engine.book engine miss : Order_book.t option))
+  ]
+;;
+
+(* ---------------------------------------------------------------- *)
 (* Allocation measurement *)
 (* ---------------------------------------------------------------- *)
 
@@ -348,5 +379,9 @@ let () =
        ; ( "snapshot"
          , Bench.make_command
              (List.map sizes ~f:(fun n -> bench_snapshot ~n)) )
+       ; ( "symbol-lookup"
+         , Bench.make_command
+             (List.concat_map symbol_counts ~f:(fun k ->
+                bench_symbol_lookup ~k)) )
        ])
 ;;
