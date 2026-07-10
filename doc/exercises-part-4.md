@@ -296,3 +296,121 @@ If your redesign is the right shape, some of your earlier Part 4 work stops bein
 `best_bid_offer` recomputes, becomes something the structure simply _gives_ you instead of something you calculate. When a whole class of "compute it each time" work disappears, that's the signal your structure finally matches the questions the book is being asked.
 
 You should be able to use existing benchmarks for this, but feel free to add new ones to measure some new improved performance you might have unlocked.
+
+## Exercise 6: Workload and profile [STRETCH]
+
+Everything you've measured so far in Part 4 has been a _micro_-benchmark: one operation, isolated in a thunk, run millions of times on a warm cache with no competing work. That's the right tool for comparing data structures, but it's not the whole story. We also want to know: **when the exchange runs flat out, where do the CPU cycles actually go?** The only way to know is to measure.
+
+The tool for this second question is a _sampling profiler_. You'll use Linux's `perf`: it interrupts your running process roughly a thousand times a second, records the call stack each time, and aggregates the samples. If 30% of samples land inside `Order_book.find_match`, then ~30% of your CPU time is going there.
+
+In this exercise you'll build a load harness that can drive the matching engine far harder than any scenario from Part 2, profile it under that load, and produce a defensible accounting of where the time goes. You'll write some code but the main deliverable is an accounting of where your program spends its time.
+
+### The workload generator
+
+Everything here depends on being able to put the matching engine under sustained, realistic, _reproducible_ load. The **Part 2 scenarios** are throttled simulations and the bots wake on tick timers, so the exchange spends almost all of its time idle. If you pointed a profiler at a scenario run, you'd mostly be profiling sleep.
+
+So the first thing you'll build is a **workload generator**. You'll write a module that produces a stream of submits and cancels, deterministically from a seed. Every "random" choice has to flow from a single `Splittable_random.State.t` so the same seed always yields the same actions. Determinism is crucial in pursuit of valid before/after comparisons.
+
+Come up with a `Config.t` that controls the shape of the traffic. The exact fields are up to you, but it should at least be able to vary:
+
+- how many symbols and how many participants the stream spans;
+- the mix of cancels vs. submits;
+- the fraction of submits that are marketable (priced to cross) vs. resting;
+- the IOC/Day mix;
+- order sizes;
+- how prices are placed (how far the market drifts, how far behind the best price resting orders sit).
+
+Then define some "preset" configs. Perhaps you want `balanced`, `churn` for cancel-heavy flow, and `book-heavy` for resting-order pileup; think carefully about what values your config record should have for each scenario.
+
+You need to write a function that takes a **Config.t** and hits the `Matching_engine` functions directly in the manner prescribed by that config. You're trying to measure server performance, so no RPC calls!
+
+Some notes:
+
+1. **Never reuse client order IDs**. As a reminder from Part 2, the engine never forgets a used client order ID, so the generator has to produce fresh ones for as long as it runs.
+
+2. **The book must reach a steady state.** If resting orders arrive faster than fills and cancels remove them, the book grows for the entire run. This isn't what you want! If that happens, no two moments of your run are measuring the same thing, and no two runs of different lengths agree. Whatever a particular config is trying to exercise, make sure you reach that steady state. If you're trying to test, say, a balanced amount of orders and cancels, the book size should plateau. In this case, make the workload generator print book depth periodically to confirm that it's actually steady as you expect.
+
+3. **Prices must not run away.** Marketable orders trade at resting prices; if your price process drifts while resting placement lags it, the sides stop crossing and your `balanced` preset silently becomes `book-heavy`. Again, if you expect the BBO to remain mostly unchanged, make sure that it actually is! If your config prescribes that a certain percentage of orders it sends should be filled, make sure you count the **actual** fills to see if it behaved as expected.
+
+4. `Splittable_random.State.of_int seed` gives you the root state; split it per concern if that keeps the code clean, but keep everything derived from the one seed.
+
+5. Think carefully about where your load generator is allocating. It's ok to do some of it, but you don't want to do a lot of it, or do it unnecessarily; you'd end up measuring that rather than the exchange activity.
+
+### The replay driver
+
+Now the thing that uses it: a `replay` subcommand (a natural home is the `Command.group` in `performance/`, next to your Exercise 0 benchmarks — you'll need to add the order-book and types libraries to its dune dependencies) that creates a matching engine, pumps N actions from the generator into `Matching_engine.submit` / `Matching_engine.cancel` in a plain synchronous loop. Again, no Async, no RPC, no pipes. It should take at least a seed and a config as inputs.
+
+The driver's output is what makes a run interpretable, so decide what it reports before you write the loop. At minimum: total wall time and **orders per second**; per-call **latency percentiles** (p50, p99, p99.9, and max); and counts of each event type observed (accepts, fills, cancels, rejects). Don't skip this! The kinds of events you observe **should** be the ones your config tells it to do, but printing out the ones you actually saw in your run is the fastest and easiest sanity check that your run is behaving correctly. Try to write out the stats in a nice way. Try composing a nice ascii table. Maybe write a little histogram module (and test it with expect tests!) or play around with the OCaml scientific computing package [Owl](https://ocaml.xyz/). Definitely also count and display something that reveals GC behavior.
+
+When you run it, consider the headline number of orders/sec and compare it against what `submit_ioc_cross (n=100)` from the `existing` suite implies (the inverse of its Time/Run). They will not agree. **Why not?** It's hard to reason about this without having experience, but think carefully about what exactly the `existing` benchmark is testing and think about the runtime of your "workload generator".
+
+### Profile it with perf
+
+Ubuntu locks perf down by default. Loosen two sysctls before anything else (you'll have to re-apply this if you get a new instance or reboot):
+
+```sh
+sudo sysctl kernel.perf_event_paranoid=1   # allow profiling your own processes
+sudo sysctl kernel.kptr_restrict=0         # allow resolving kernel symbols
+```
+
+Now a smoke test on a program you don't care about:
+
+```sh
+perf record -F 997 --call-graph=dwarf -- timeout 5 sha256sum /dev/zero
+perf report --stdio --no-children | head -25
+```
+
+The `record` command runs `sha256sum` for five seconds, interrupting it 997 times a second and saving the call stack each time to `perf.data`. The `report` command aggregates those samples: one row per function, `Overhead` = the fraction of samples that landed there = the fraction of CPU time it consumed.
+
+Except the output has no function names — just rows of raw hex addresses. That's not a perf problem: Ubuntu ships `sha256sum` with its symbol table stripped, so perf has nothing to name the code with. First lesson of profiling: perf can only tell you what the binary tells it. Your OCaml executables keep their symbol tables (and dune passes `-g`, which is what makes `--call-graph=dwarf` able to unwind stacks), so they profile properly. Try it:
+
+```sh
+dune build --profile release
+perf record -F 997 --call-graph=dwarf -- \
+  _build/default/performance/bin/main.exe replay -preset balanced -num-actions 5000000
+perf report --stdio --no-children | head -40
+```
+
+Two things about the incantation:
+
+- Run the binary from `_build` directly. `perf record dune exec ...` profiles dune's whole process tree, not just your program.
+- `--call-graph=dwarf` is required because ocaml doesn't maintain frame pointers, so the default unwinder produces garbage stacks. DWARF unwinding produces large `perf.data` files — keep captures to a minute or so.
+
+Reading the output:
+
+- The top rows are your budget: where the CPU time actually went.
+- OCaml names are mangled: `camlOrder_book__find_match_1234` is `Order_book.find_match`; `camlMap__...` frames are the Map machinery underneath the book.
+- Frames like `caml_minor_collection`, `caml_major_collection_slice`, `caml_alloc*`, and `memmove` are the OCaml runtime — mostly the garbage collector. Their combined share is your GC tax: the `mWd/Run` column from Exercise 0, converted into wall-clock time.
+- To see who _calls_ a hot function, use the interactive view: `perf report` (no `--stdio`), arrow to the row, `Enter` to expand its call chains.
+- Samples on a shared machine are noisy. Record the same run twice and compare (`perf report --stdio > a.txt`, then `diff`) before believing any difference.
+
+**The deliverable:** a budget table for each preset, made by hand (do not write code to do it, that would be incredibly painful for no reason). perf gives you percentages per _function_; your job is to map them to _components_. Walk the top rows of the report, assign each symbol to a bucket (matching, book mutation, BBO bookkeeping, event construction, generator overhead, GC, other runtime), and sum until you've accounted for at least ~85% of samples. The judgment is in the assignment: `camlMap__bal` samples under `Order_book.add` are book mutation, but the same symbol under your generator's bookkeeping is generator overhead. And when you can't confidently place a frame, expand its callers in the interactive view rather than guessing.
+
+### The long run
+
+Now launch the replay driver and leave it running: millions of actions (submits, cancels, etc), with a flag that prints `Gc.stat ()` highlights (at least `live_words`) every million or so. The book's depth is at steady state, so the live heap should plateau too. But it won't! Your task is to find out why!
+
+Think carefully about — and measure! — your allocations. Where are they happening, and why?
+
+<details>
+<summary>Hint</summary>
+When you send in a submit, a cancel, etc., what exactly does the engine persist — and for how long?
+</details>
+
+Don't just speculate or try to figure it out by looking at the code. Instrument it. Figure out which functions are being called and how `live_words` changes based on those calls.
+
+### Profile the real server [OPTIONAL]
+
+The replay driver deliberately amputated everything but the engine, which is necessary to keep the clean profile. The production configuration is a different animal: RPC deserialization, the dispatcher fanning every event out to subscribers, Async's scheduler. Profile it: run the actual server binary, drive it with a firehose client (a stripped-down bot that logs in and submits in a tight loop — no ticks; drain and discard its session feed), and attach perf to the server by PID:
+
+```sh
+perf record -F 997 --call-graph=dwarf -p "$(pgrep -f app/server)" -- sleep 30
+```
+
+This run isn't deterministic the way replay is (the async scheduler sees to that), and on a two-vCPU box the client and server are sharing a core — so treat the budget _percentages_ as the deliverable, not the throughput. Build the same budget table and answer:
+
+- What fraction of server cycles is `Matching_engine.submit` now? Where did the rest go?
+- How does the profile change with zero subscribers versus a monitor plus several market-data subscriptions attached? Who pays for a new subscriber?
+- Was your Exercise 2 symbol-interning win visible at this level? If not, write a short paragraph on when micro-optimizations are worth doing anyway — citing your own numbers from both profiles.
+
+**AI note.** Claude is genuinely useful here for perf incantations, decoding mangled symbols, and scaffolding the generator. It is bad at the two things that are the point: deciding whether a workload is representative, and reading a profile honestly. It will confidently attribute samples to the wrong bucket, and it loves declaring victory off a delta that's inside run-to-run noise. The budget table, and the conclusions you draw from the long run, should be yours.
