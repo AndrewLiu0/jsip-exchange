@@ -2,7 +2,7 @@ open! Core
 
 type t =
   { fill_id : int
-  ; symbol : Symbol.t
+  ; symbol : Symbol_id.t
   ; price : Price.t
   ; size : Size.t
   ; aggressor_order_id : Order_id.t
@@ -33,7 +33,7 @@ let to_string
   sprintf
     "fill_id=%d %s %s x%d aggressor=%s|%s(%s) %s resting=%s|%s(%s)"
     fill_id
-    (Symbol.to_string symbol)
+    (Symbol_id.to_string symbol)
     (Price.to_string_dollar price)
     (Size.to_int size)
     (Client_order_id.to_string aggressor_client_order_id)
@@ -57,7 +57,7 @@ let to_participant_view t participant =
          "You %s %d %s at %s"
          resting_verb
          (Size.to_int t.size)
-         (Symbol.to_string t.symbol)
+         (Symbol_id.to_string t.symbol)
          (Price.to_string_dollar t.price))
   else None
 ;;

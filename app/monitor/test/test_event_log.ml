@@ -38,12 +38,12 @@ let%expect_test "events appear in insertion order" =
   [%expect
     {|
     count=6
-    ACCEPTED id=1 AAPL BUY 100@$150.00 DAY
-    FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
-    CANCELLED id=1 AAPL remaining=50 reason=IOC_REMAINDER
-    REJECTED AAPL BUY 100@$150.00 reason=unknown symbol
-    BBO AAPL bid=$149.90 x100 ask=$150.10 x200
-    TRADE AAPL $150.00 x100
+    ACCEPTED id=1 0 BUY 100@$150.00 DAY
+    FILL fill_id=1 0 $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
+    CANCELLED id=1 0 remaining=50 reason=IOC_REMAINDER
+    REJECTED 0 BUY 100@$150.00 reason=unknown symbol
+    BBO 0 bid=$149.90 x100 ask=$150.10 x200
+    TRADE 0 $150.00 x100
     |}]
 ;;
 
@@ -56,14 +56,14 @@ let%expect_test "filter by substring keeps only matching lines" =
   in
   print_lines (Event_log.visible_lines log);
   [%expect
-    {| FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob) |}]
+    {| FILL fill_id=1 0 $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob) |}]
 ;;
 
 let%expect_test "substring filter is case-insensitive" =
   let log = log_with_sample_events () in
   let log = Event_log.set_filter log (Event_log.Filter.by_substring "bbo") in
   print_lines (Event_log.visible_lines log);
-  [%expect {| BBO AAPL bid=$149.90 x100 ask=$150.10 x200 |}]
+  [%expect {| BBO 0 bid=$149.90 x100 ask=$150.10 x200 |}]
 ;;
 
 (* ----- filter: categories ----- *)
@@ -78,9 +78,9 @@ let%expect_test "filter by category groups variants" =
   print_lines (Event_log.visible_lines log);
   [%expect
     {|
-    ACCEPTED id=1 AAPL BUY 100@$150.00 DAY
-    CANCELLED id=1 AAPL remaining=50 reason=IOC_REMAINDER
-    REJECTED AAPL BUY 100@$150.00 reason=unknown symbol
+    ACCEPTED id=1 0 BUY 100@$150.00 DAY
+    CANCELLED id=1 0 remaining=50 reason=IOC_REMAINDER
+    REJECTED 0 BUY 100@$150.00 reason=unknown symbol
     |}]
 ;;
 
@@ -92,8 +92,8 @@ let%expect_test "market-data category covers BBO and trade reports" =
   print_lines (Event_log.visible_lines log);
   [%expect
     {|
-    BBO AAPL bid=$149.90 x100 ask=$150.10 x200
-    TRADE AAPL $150.00 x100
+    BBO 0 bid=$149.90 x100 ask=$150.10 x200
+    TRADE 0 $150.00 x100
     |}]
 ;;
 
@@ -108,7 +108,7 @@ let%expect_test "combined filters intersect" =
   in
   let log = Event_log.set_filter log f in
   print_lines (Event_log.visible_lines log);
-  [%expect {| TRADE AAPL $150.00 x100 |}]
+  [%expect {| TRADE 0 $150.00 x100 |}]
 ;;
 
 (* ----- styled rendering ----- *)
@@ -118,25 +118,25 @@ let%expect_test "each event variant renders with its assigned color" =
   print_styled (Event_log.visible_styled_lines log);
   [%expect
     {|
-    [green] ACCEPTED id=1 AAPL BUY 100@$150.00 DAY
-    [cyan] FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
-    [yellow] CANCELLED id=1 AAPL remaining=50 reason=IOC_REMAINDER
-    [red] REJECTED AAPL BUY 100@$150.00 reason=unknown symbol
-    [blue] BBO AAPL bid=$149.90 x100 ask=$150.10 x200
-    [magenta] TRADE AAPL $150.00 x100
+    [green] ACCEPTED id=1 0 BUY 100@$150.00 DAY
+    [cyan] FILL fill_id=1 0 $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
+    [yellow] CANCELLED id=1 0 remaining=50 reason=IOC_REMAINDER
+    [red] REJECTED 0 BUY 100@$150.00 reason=unknown symbol
+    [blue] BBO 0 bid=$149.90 x100 ask=$150.10 x200
+    [magenta] TRADE 0 $150.00 x100
     |}]
 ;;
 
 let print_bbos log =
   List.iter (Event_log.current_bbos log) ~f:(fun (symbol, bbo) ->
-    print_endline [%string "%{symbol#Symbol}: %{bbo#Bbo}"])
+    print_endline [%string "%{symbol#Symbol_id}: %{bbo#Bbo}"])
 ;;
 
 let%expect_test "current_bbos tracks latest BBO per symbol in \
                  first-appearance order"
   =
-  let aapl = Symbol.of_string "AAPL" in
-  let tsla = Symbol.of_string "TSLA" in
+  let aapl = Symbol_id.of_int_exn 0 in
+  let tsla = Symbol_id.of_int_exn 1 in
   let bbo bid_cents ask_cents : Bbo.t =
     { bid =
         Some { price = Price.of_int_cents bid_cents; size = Size.of_int 100 }
@@ -159,8 +159,8 @@ let%expect_test "current_bbos tracks latest BBO per symbol in \
   print_bbos log;
   [%expect
     {|
-    AAPL: $149.95 x100 / $150.05 x200
-    TSLA: $249.90 x100 / $250.10 x200
+    0: $149.95 x100 / $150.05 x200
+    1: $249.90 x100 / $250.10 x200
     |}]
 ;;
 

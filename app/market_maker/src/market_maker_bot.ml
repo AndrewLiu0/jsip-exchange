@@ -96,7 +96,7 @@ let post_ladder (config : Config.t) ctx =
     in
     let request : Order.Request.t =
       { client_order_id = Client_order_id.Generator.generate config.state.ids
-      ; symbol = config.symbol
+      ; symbol = Context.symbol_id_exn ctx config.symbol
       ; side
       ; price = Price.of_int_cents price_cents
       ; size = Size.of_int config.size_per_level

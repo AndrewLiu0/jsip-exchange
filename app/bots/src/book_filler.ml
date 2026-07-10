@@ -44,7 +44,7 @@ let request_for
   let client_order_id = Client_order_id.of_int config.next_client_id in
   config.next_client_id <- config.next_client_id + 1;
   { client_order_id
-  ; symbol
+  ; symbol = Bot_runtime.Context.symbol_id_exn context symbol
   ; side
   ; price
   ; size = config.order_size

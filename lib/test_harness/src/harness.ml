@@ -8,6 +8,13 @@ open Jsip_gateway
 let aapl = Symbol.of_string "AAPL"
 let tsla = Symbol.of_string "TSLA"
 let goog = Symbol.of_string "GOOG"
+
+(* Wire ids under [create]'s default symbol list [ aapl; tsla; goog ]: id =
+   position in that list, matching [Symbol_directory.of_symbols]. Tests that
+   pass their own [~symbols] must mint their own ids. *)
+let aapl_id = Symbol_id.of_int_exn 0
+let tsla_id = Symbol_id.of_int_exn 1
+let goog_id = Symbol_id.of_int_exn 2
 let alice = Participant.of_string "Alice"
 let bob = Participant.of_string "Bob"
 let charlie = Participant.of_string "Charlie"
@@ -15,7 +22,10 @@ let market_maker = Participant.of_string "MarketMaker"
 
 (* --- Harness --- *)
 
-type t = { engine : Matching_engine.t }
+type t =
+  { engine : Matching_engine.t
+  ; directory : Symbol_directory.t
+  }
 
 (* Test-only counter that supplies fresh [Client_order_id.t]s to [buy]/[sell]
    when the caller doesn't specify one. Client order IDs are never reused by
@@ -40,10 +50,16 @@ let reset_client_order_id_counter () =
 
 let create ?(symbols = [ aapl; tsla; goog ]) () =
   reset_client_order_id_counter ();
-  { engine = Matching_engine.create symbols }
+  let directory = Symbol_directory.of_symbols symbols in
+  { engine =
+      Matching_engine.create
+        ~num_symbols:(Symbol_directory.num_symbols directory)
+  ; directory
+  }
 ;;
 
 let engine t = t.engine
+let directory t = t.directory
 
 (* --- Builders --- *)
 
@@ -51,7 +67,7 @@ let make_request
   ~side
   ~price_cents
   ?(size = 100)
-  ?(symbol = aapl)
+  ?(symbol = aapl_id)
   ?(time_in_force = Time_in_force.Day)
   ?(client_order_id = next_client_order_id ())
   ()
@@ -122,7 +138,7 @@ let submit_quiet ?(participant = alice) t request =
 let sample_events : Exchange_event.t list =
   let order_request : Order.Request.t =
     { client_order_id = Client_order_id.For_testing.of_int 1
-    ; symbol = aapl
+    ; symbol = aapl_id
     ; side = Buy
     ; price = Price.of_int_cents 15000
     ; size = Size.of_int 100
@@ -136,7 +152,7 @@ let sample_events : Exchange_event.t list =
       }
   ; Fill
       { fill_id = 1
-      ; symbol = aapl
+      ; symbol = aapl_id
       ; price = Price.of_int_cents 15000
       ; size = Size.of_int 100
       ; aggressor_client_order_id = Client_order_id.For_testing.of_int 1
@@ -151,7 +167,7 @@ let sample_events : Exchange_event.t list =
       { order_id = Order_id.For_testing.of_int 1
       ; client_order_id = Client_order_id.For_testing.of_int 1
       ; participant = alice
-      ; symbol = aapl
+      ; symbol = aapl_id
       ; remaining_size = Size.of_int 50
       ; reason = Ioc_remainder
       }
@@ -161,7 +177,7 @@ let sample_events : Exchange_event.t list =
       ; reason = "unknown symbol"
       }
   ; Best_bid_offer_update
-      { symbol = aapl
+      { symbol = aapl_id
       ; bbo =
           { bid =
               Some
@@ -172,7 +188,7 @@ let sample_events : Exchange_event.t list =
           }
       }
   ; Trade_report
-      { symbol = aapl
+      { symbol = aapl_id
       ; price = Price.of_int_cents 15000
       ; size = Size.of_int 100
       }
@@ -185,14 +201,14 @@ let submit_quiet_ ?participant t request =
 
 let print_book t symbol =
   match Matching_engine.book t.engine symbol with
-  | None -> print_endline [%string "unknown symbol %{symbol#Symbol}"]
+  | None -> print_endline [%string "unknown symbol %{symbol#Symbol_id}"]
   | Some book -> Order_book.snapshot book |> Book.to_string |> print_endline
 ;;
 
 let print_bbo t symbol =
   match Matching_engine.book t.engine symbol with
-  | None -> print_endline [%string "BBO %{symbol#Symbol}: unknown symbol"]
+  | None -> print_endline [%string "BBO %{symbol#Symbol_id}: unknown symbol"]
   | Some book ->
     let bbo = Order_book.best_bid_offer book |> Bbo.to_string in
-    print_endline [%string "BBO %{symbol#Symbol}: %{bbo}"]
+    print_endline [%string "BBO %{symbol#Symbol_id}: %{bbo}"]
 ;;

@@ -3,10 +3,10 @@ open Jsip_types
 module Order_queue = Hash_queue.Make (Order_id)
 
 type t =
-  { symbol : Symbol.t
+  { symbol : Symbol_id.t
   ; mutable bids : Order.t Order_queue.t Price.Map.t
   ; mutable asks : Order.t Order_queue.t Price.Map.t
-  ; mutable id_to_order : Order.t Order_id.Map.t (*Can make Hashtable? *)
+  ; mutable id_to_order : Order.t Order_id.Map.t (* Can make Hashtable? *)
   }
 [@@deriving sexp_of]
 

@@ -46,13 +46,22 @@ let connect_as ~where_to_connect participant =
    accumulate in the book every cycle; and since neither participant reads
    its session feed, the accepts and fills also accumulate unread in the
    session pipes. *)
-let trade_back_and_forth ~where_to_connect =
-  (* One pair of MMs per symbol, anchored at a representative fair value. *)
+let trade_back_and_forth ~where_to_connect ~directory =
+  (* One pair of MMs per symbol, anchored at a representative fair value. The
+     wire wants ids, so resolve each demo name through the directory up front
+     — a miss means this list drifted from [default_symbols]. *)
   let symbol_anchors =
     [ Symbol.of_string "AAPL", 15000
     ; Symbol.of_string "TSLA", 25000
     ; Symbol.of_string "GOOG", 28000
     ]
+    |> List.map ~f:(fun (symbol, anchor) ->
+      match Symbol_directory.id directory symbol with
+      | Some id -> id, anchor
+      | None ->
+        raise_s
+          [%message
+            "demo symbol is not in default_symbols" (symbol : Symbol.t)])
   in
   (* MM_Low's fair value sits [low_offset_cents] below the anchor and
      MM_High's sits [high_offset_cents] above. The offsets are asymmetric so
@@ -108,11 +117,16 @@ let trade_back_and_forth ~where_to_connect =
 ;;
 
 let start ~port ~http_port ~market_maker_behavior =
+  (* The authoritative name<->id assignment for this server run: symbol i of
+     [default_symbols] trades as id i. Everything else — the engine's book
+     array, the demo market makers, and (in Phase 2) every client's mirrored
+     directory — derives from this one value. *)
+  let directory = Symbol_directory.of_symbols default_symbols in
   let%bind server =
     Exchange_server.start
       ?http_port
       ~http_handler:Jsip_dashboard_assets.handler
-      ~symbols:default_symbols
+      ~directory
       ~port
       ()
   in
@@ -125,7 +139,7 @@ let start ~port ~http_port ~market_maker_behavior =
       let%map () =
         print_endline
           "=== Starting two market makers trading back-and-forth ===";
-        trade_back_and_forth ~where_to_connect
+        trade_back_and_forth ~where_to_connect ~directory
       in
       print_endline ""
     | `Do_nothing -> Deferred.unit

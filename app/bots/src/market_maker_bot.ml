@@ -13,7 +13,10 @@ module Config = struct
     ; fill_client_oid : int ref
         (* ----Don't need because we manually compute based on which position
            on the ladder we are posting *)
-    ; mutable inventory : int Symbol.Map.t
+    ; mutable inventory : int Symbol_id.Map.t
+        (* Keyed by the wire id: inventory updates come from [Fill] events,
+           which carry ids, so keying by id avoids a name resolution per
+           fill. *)
     ; mutable currently_resting_orders : Size.t Client_order_id.Map.t
     }
   [@@deriving sexp_of]
@@ -46,10 +49,11 @@ let on_start (config : Config.t) (context : Context.t) =
       let ask_client_order_id =
         Client_order_id.of_int ((2 * level_idx) + 102)
       in
+      let symbol = Context.symbol_id_exn context config.symbol in
       let%bind () =
         submit
           ({ client_order_id = bid_client_order_id
-           ; symbol = config.symbol
+           ; symbol
            ; side = Buy
            ; price = Price.of_int_cents (config.fair_value_cents - offset)
            ; size = Size.of_int config.size_per_level
@@ -59,7 +63,7 @@ let on_start (config : Config.t) (context : Context.t) =
       and () =
         submit
           ({ client_order_id = ask_client_order_id
-           ; symbol = config.symbol
+           ; symbol
            ; side = Sell
            ; price = Price.of_int_cents (config.fair_value_cents + offset)
            ; size = Size.of_int config.size_per_level

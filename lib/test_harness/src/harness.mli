@@ -26,6 +26,14 @@ open Jsip_order_book
 val aapl : Symbol.t
 val tsla : Symbol.t
 val goog : Symbol.t
+
+(** The wire ids of [aapl]/[tsla]/[goog] under [create]'s default symbol list
+    (id = list position): 0, 1, and 2 respectively. Tests that pass a custom
+    [~symbols] list must mint ids to match its order. *)
+
+val aapl_id : Symbol_id.t
+val tsla_id : Symbol_id.t
+val goog_id : Symbol_id.t
 val alice : Participant.t
 val bob : Participant.t
 val charlie : Participant.t
@@ -56,20 +64,25 @@ val reset_client_order_id_counter : unit -> unit
 (** The underlying matching engine. *)
 val engine : t -> Matching_engine.t
 
+(** The name <-> id directory built from [create]'s symbol list — the same
+    mapping the engine's book array is indexed by. *)
+val directory : t -> Jsip_gateway.Symbol_directory.t
+
 (** {2 Order request builders}
 
     These build [Order.Request.t] values with sensible defaults:
-    - symbol: AAPL
+    - symbol: [aapl_id]
     - size: 100
     - time_in_force: Day
 
-    Participant is supplied at submission time (see [submit] below),
+    Requests carry the wire {!Symbol_id.t}, exactly as a client would send
+    them. Participant is supplied at submission time (see [submit] below),
     defaulting to Alice. *)
 
 val buy
   :  price_cents:int
   -> ?size:int
-  -> ?symbol:Symbol.t
+  -> ?symbol:Symbol_id.t
   -> ?time_in_force:Time_in_force.t
   -> ?client_order_id:Client_order_id.t
   -> unit
@@ -78,7 +91,7 @@ val buy
 val sell
   :  price_cents:int
   -> ?size:int
-  -> ?symbol:Symbol.t
+  -> ?symbol:Symbol_id.t
   -> ?time_in_force:Time_in_force.t
   -> ?client_order_id:Client_order_id.t
   -> unit
@@ -155,7 +168,7 @@ val print_events : ?show:Show.t -> Exchange_event.t list -> unit
 val print_event : Exchange_event.t -> unit
 
 (** Print the current order book for a symbol. Shows bids, asks, and the BBO. *)
-val print_book : t -> Symbol.t -> unit
+val print_book : t -> Symbol_id.t -> unit
 
 (** Print a concise BBO summary for a symbol. *)
-val print_bbo : t -> Symbol.t -> unit
+val print_bbo : t -> Symbol_id.t -> unit

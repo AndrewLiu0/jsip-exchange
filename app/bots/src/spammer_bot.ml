@@ -51,7 +51,7 @@ module T = struct
     =
     let fundamental = Bot_runtime.Context.fundamental context symbol in
     let request : Order.Request.t =
-      { symbol
+      { symbol = Bot_runtime.Context.symbol_id_exn context symbol
       ; side = config.side
       ; price =
           passive_price

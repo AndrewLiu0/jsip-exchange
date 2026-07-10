@@ -12,7 +12,7 @@ module Bot_runtime = Jsip_bot_runtime.Bot_runtime
    bot will log in and subscribe to its session-feed RPC, so its [on_event]
    handler can react to the matching engine's responses to its own orders and
    to fills against its resting orders. *)
-let start_bot ~where_to_connect ~oracle (Bot_spec.T spec) =
+let start_bot ~where_to_connect ~oracle ~directory (Bot_spec.T spec) =
   let%bind connection =
     Rpc.Connection.client where_to_connect
     >>| Result.map_error ~f:Error.of_exn
@@ -44,6 +44,8 @@ let start_bot ~where_to_connect ~oracle (Bot_spec.T spec) =
       ~rng:(Splittable_random.of_int spec.rng_seed)
       ~submit
       ~cancel
+      ~symbol_id:(Symbol_directory.id directory)
+      ~symbol_name:(Symbol_directory.name directory)
       ~tick_interval:spec.tick_interval
   in
   let%bind session_feed, _metadata =
@@ -54,11 +56,24 @@ let start_bot ~where_to_connect ~oracle (Bot_spec.T spec) =
     match spec.is_marketdata_consumer with
     | false -> return ()
     | true ->
+      (* Scenario specs name symbols; the wire wants ids. A name the exchange
+         doesn't trade is a scenario wiring bug, so fail loudly rather than
+         silently subscribing to nothing. *)
+      let symbol_ids =
+        List.map spec.symbols ~f:(fun symbol ->
+          match Symbol_directory.id directory symbol with
+          | Some id -> id
+          | None ->
+            raise_s
+              [%message
+                "scenario subscribes to a symbol the exchange doesn't trade"
+                  (symbol : Symbol.t)])
+      in
       let%bind md_pipe, metadata =
         Rpc.Pipe_rpc.dispatch_exn
           Rpc_protocol.market_data_rpc
           connection
-          spec.symbols
+          symbol_ids
       in
       don't_wait_for
         (let%bind () = Pipe.iter md_pipe ~f:(Bot_runtime.feed_event bot) in
@@ -81,11 +96,15 @@ let run ?http_port (config : Scenario_config.t) ~port ~seed =
     [%string
       "[scenario] starting %{config.name} on port %{port#Int} \
        (seed=%{seed#Int})"];
+  (* The authoritative id assignment for this run: symbol i in the scenario's
+     list gets id i. Built here (not inside the server) so the runner can
+     hand bots their name<->id mirror before any of them starts. *)
+  let directory = Symbol_directory.of_symbols config.symbols in
   let%bind server =
     Exchange_server.start
       ?http_port
       ~http_handler:Jsip_dashboard_assets.handler
-      ~symbols:config.symbols
+      ~directory
       ~port
       ()
   in
@@ -107,7 +126,7 @@ let run ?http_port (config : Scenario_config.t) ~port ~seed =
     Deferred.List.iter
       ~how:`Parallel
       config.bots
-      ~f:(start_bot ~where_to_connect ~oracle)
+      ~f:(start_bot ~where_to_connect ~oracle ~directory)
   in
   Exchange_server.close_finished server
 ;;

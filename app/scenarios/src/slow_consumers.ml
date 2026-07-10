@@ -37,7 +37,7 @@ let market_maker_spec () =
     ; size_per_level = 100
     ; num_levels = 30
     ; fill_client_oid = ref 900
-    ; inventory = Symbol.Map.empty
+    ; inventory = Symbol_id.Map.empty
     ; currently_resting_orders = Client_order_id.Map.empty
     }
   in

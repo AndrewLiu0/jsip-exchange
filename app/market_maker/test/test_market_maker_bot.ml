@@ -55,8 +55,13 @@ let make_bot ?(inventory_skew_cents_per_share = 1) () =
       (oracle_config ~initial_price_cents:15000)
       ~seed:42
   in
+  let directory =
+    Jsip_gateway.Symbol_directory.of_symbols [ Harness.aapl ]
+  in
   let bot =
     Bot_runtime.create
+      ~symbol_id:(Jsip_gateway.Symbol_directory.id directory)
+      ~symbol_name:(Jsip_gateway.Symbol_directory.name directory)
       (module Market_maker_bot)
       config
       ~participant:Harness.market_maker

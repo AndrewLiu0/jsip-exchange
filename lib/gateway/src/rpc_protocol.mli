@@ -29,19 +29,22 @@ val submit_order_rpc : (Order.Request.t, unit Or_error.t) Rpc.Rpc.t
 
 val cancel_order_rpc : (Client_order_id.t, unit Or_error.t) Rpc.Rpc.t
 
-(** Query the order book for a given symbol. Returns a structured snapshot of
-    all resting orders on both sides, if a book for that symbol exists. *)
-val book_query_rpc : (Symbol.t, Book.t option) Rpc.Rpc.t
+(** Query the order book for a given symbol id. Returns a structured snapshot
+    of all resting orders on both sides, if a book for that id exists —
+    [None] covers unknown and out-of-range ids alike. *)
+val book_query_rpc : (Symbol_id.t, Book.t option) Rpc.Rpc.t
 
 val login_rpc : (string, Participant.t Or_error.t) Rpc.Rpc.t
 
-(** Subscribe to market data for one or more symbols. The server pushes BBO
-    updates and trade reports as they happen via a single pipe. The query is
-    the list of symbols to subscribe to; using one RPC for the whole list
+(** Subscribe to market data for one or more symbol ids. The server pushes
+    BBO updates and trade reports as they happen via a single pipe. The query
+    is the list of ids to subscribe to; using one RPC for the whole list
     avoids the overhead of opening a separate pipe per symbol when a client
-    cares about several. *)
+    cares about several. Ids the server doesn't trade are ignored (they can
+    never match an event), matching the old behavior for unknown symbol
+    strings. *)
 val market_data_rpc
-  : (Symbol.t list, Exchange_event.t, Error.t) Rpc.Pipe_rpc.t
+  : (Symbol_id.t list, Exchange_event.t, Error.t) Rpc.Pipe_rpc.t
 
 (** Subscribe to the full audit log: every [Exchange_event.t] the matching
     engine produces, across every symbol and participant.

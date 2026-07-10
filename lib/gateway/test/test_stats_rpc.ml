@@ -52,7 +52,7 @@ let%expect_test "exchange-stats reflects submits, cancels, and sessions" =
   let%bind server =
     Exchange_server.start
       ~stats_period:(Time_ns.Span.of_ms 50.)
-      ~symbols:[ Harness.aapl ]
+      ~directory:(Symbol_directory.of_symbols [ Harness.aapl ])
       ~port:0
       ()
   in
@@ -155,7 +155,7 @@ let%expect_test "exchange-stats is reachable over websocket" =
     Exchange_server.start
       ~stats_period:(Time_ns.Span.of_ms 50.)
       ~http_port:0
-      ~symbols:[ Harness.aapl ]
+      ~directory:(Symbol_directory.of_symbols [ Harness.aapl ])
       ~port:0
       ()
   in

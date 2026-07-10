@@ -18,7 +18,9 @@ open Jsip_types
 module Config : sig
   type t =
     { participant : Participant.t
-    ; symbol : Symbol.t
+    ; symbol : Symbol_id.t
+    (** The wire id of the symbol to quote, resolved by the caller through
+        the symbol directory. *)
     ; fair_value_cents : int
     (** The market maker's estimate of the true price, in cents. *)
     ; half_spread_cents : int

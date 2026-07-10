@@ -73,7 +73,7 @@ let submit_and_cancel_one (config : Config.t) (ctx : Bot_runtime.Context.t) =
   incr config.next_id;
   let request : Order.Request.t =
     { client_order_id
-    ; symbol = config.symbol
+    ; symbol = Bot_runtime.Context.symbol_id_exn ctx config.symbol
     ; side = config.side
     ; price = passive_price config ctx
     ; size = config.size

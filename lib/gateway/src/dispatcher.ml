@@ -4,22 +4,32 @@ open Jsip_types
 
 type t =
   { market_data_subscribers_by_symbol :
-      Exchange_event.t Pipe.Writer.t Bag.t Symbol.Table.t
+      Exchange_event.t Pipe.Writer.t Bag.t Symbol_id.Table.t
   ; audit_subscribers : Exchange_event.t Pipe.Writer.t Bag.t
   ; registry : Participant_id.Registry.t
+  ; directory : Symbol_directory.t
   ; id_to_session : (Participant_id.t, Session.t) Hashtbl.t
   }
 
-let create registry =
-  { market_data_subscribers_by_symbol = Symbol.Table.create ()
+let create registry ~directory =
+  { market_data_subscribers_by_symbol = Symbol_id.Table.create ()
   ; audit_subscribers = Bag.create ()
   ; registry
+  ; directory
   ; id_to_session = Hashtbl.create (module Participant_id)
   }
 ;;
 
 let subscribe_market_data t symbols =
   let reader, writer = Pipe.create () in
+  (* Ids come straight from the client's subscription request, so filter out
+     anything the directory doesn't know — this keeps the table's keys valid
+     by construction. A subscription to only unknown ids yields a pipe that
+     never fires, matching the old behavior for unknown symbol strings. *)
+  let symbols =
+    List.filter symbols ~f:(fun id ->
+      Option.is_some (Symbol_directory.name t.directory id))
+  in
   (* Register the same writer in every requested symbol's bag. A per-symbol
      publish iterates a single bag, so a subscriber listed in multiple bags
      receives each event exactly once — only via whichever bag matches the
@@ -144,8 +154,14 @@ let dispatch t events = List.iter events ~f:(dispatch_event t)
 
 let market_data_queue_lengths t =
   Hashtbl.to_alist t.market_data_subscribers_by_symbol
-  |> List.map ~f:(fun (symbol, subscribers) ->
-    symbol, List.map (Bag.to_list subscribers) ~f:Pipe.length)
+  |> List.filter_map ~f:(fun (id, subscribers) ->
+    (* The snapshot speaks names (like its participant columns), so resolve
+       at this edge. [subscribe_market_data] only admits directory-known ids,
+       so the filter_map never actually drops anything. *)
+    match Symbol_directory.name t.directory id with
+    | None -> None
+    | Some symbol ->
+      Some (symbol, List.map (Bag.to_list subscribers) ~f:Pipe.length))
   |> List.sort ~compare:(fun (s1, _) (s2, _) -> Symbol.compare s1 s2)
 ;;
 

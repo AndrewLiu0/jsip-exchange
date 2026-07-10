@@ -41,7 +41,7 @@ open Jsip_order_book
 (* Setup helpers *)
 (* ---------------------------------------------------------------- *)
 
-let aapl = Symbol.of_string "AAPL"
+let aapl = Symbol_id.of_int_exn 0
 let alice = Participant.of_string "Alice"
 let bob = Participant.of_string "Bob"
 
@@ -97,7 +97,7 @@ let book_with_n_same_price_asks n =
 
 (** Build a matching engine with [n] resting sells on AAPL. *)
 let engine_with_n_asks ?(min_price = 10_000) n =
-  let engine = Matching_engine.create [ aapl ] in
+  let engine = Matching_engine.create ~num_symbols:1 in
   for i = 1 to n do
     ignore
       (Matching_engine.submit
@@ -286,19 +286,17 @@ let bench_submit_sweep ~n =
 (* Symbol counts get their own sweep: [sizes] above counts resting orders,
    whereas the symbol lookup only becomes visible with many symbols. *)
 let symbol_counts = [ 10; 100; 1_000; 10_000 ]
-let symbol_of_index i = Symbol.of_string [%string "SYM%{i#Int}"]
 
 (** Engine trading [k] symbols, all books empty: [Matching_engine.book] is
     then a pure symbol-resolution measurement, not buried under matching
     work. The benchmarks in [tests] are all single-symbol, so they never
     stress this lookup. *)
 let bench_symbol_lookup ~k =
-  let engine = Matching_engine.create (List.init k ~f:symbol_of_index) in
-  (* Probes prebuilt outside the thunks. The miss shares the "SYM" prefix
-     with every traded symbol, so its comparisons pay realistic prefix walks
-     instead of bailing on the first character. *)
-  let hit = symbol_of_index (k / 2) in
-  let miss = symbol_of_index k in
+  let engine = Matching_engine.create ~num_symbols:k in
+  (* Probes prebuilt outside the thunks. The miss is one past the last valid
+     id, i.e. out of range. *)
+  let hit = Symbol_id.of_int_exn (k / 2) in
+  let miss = Symbol_id.of_int_exn k in
   [ Bench.Test.create
       ~name:[%string "book_hit (symbols=%{k#Int})"]
       (fun () ->

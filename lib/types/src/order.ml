@@ -3,7 +3,7 @@ open! Core
 module Request = struct
   type t =
     { client_order_id : Client_order_id.t
-    ; symbol : Symbol.t
+    ; symbol : Symbol_id.t
     ; side : Side.t
     ; price : Price.t
     ; size : Size.t
@@ -16,14 +16,14 @@ module Request = struct
     let price = Price.to_string_dollar price in
     let size = Size.to_int size in
     [%string
-      "%{side#Side} %{client_order_id#Client_order_id} %{symbol#Symbol} \
+      "%{side#Side} %{client_order_id#Client_order_id} %{symbol#Symbol_id} \
        %{size#Int}@%{price} %{time_in_force#Time_in_force}"]
   ;;
 end
 
 type t =
   { order_id : Order_id.t
-  ; symbol : Symbol.t
+  ; symbol : Symbol_id.t
   ; participant : Participant.t
   ; side : Side.t
   ; price : Price.t

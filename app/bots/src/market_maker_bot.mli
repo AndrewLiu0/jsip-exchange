@@ -11,7 +11,7 @@ module Config : sig
     ; size_per_level : int
     ; num_levels : int
     ; fill_client_oid : int ref
-    ; mutable inventory : int Symbol.Map.t
+    ; mutable inventory : int Symbol_id.Map.t
     ; mutable currently_resting_orders : Size.t Client_order_id.Map.t
     }
   [@@deriving sexp_of]

@@ -5,6 +5,8 @@ open Jsip_fundamental
 open Jsip_bot_runtime
 
 let aapl = Symbol.of_string "AAPL"
+let directory = Jsip_gateway.Symbol_directory.of_symbols [ aapl ]
+let aapl_id = Symbol_id.of_int_exn 0
 let alice = Participant.of_string "Alice"
 let bob = Participant.of_string "Bob"
 
@@ -50,6 +52,8 @@ let make_recording_bot ~participant =
       ~rng:(Splittable_random.of_int 0)
       ~submit
       ~cancel
+      ~symbol_id:(Jsip_gateway.Symbol_directory.id directory)
+      ~symbol_name:(Jsip_gateway.Symbol_directory.name directory)
       ~tick_interval:(Time_ns.Span.of_sec 1.0)
   in
   bot, observed
@@ -57,7 +61,7 @@ let make_recording_bot ~participant =
 
 let bbo_event : Exchange_event.t =
   Best_bid_offer_update
-    { symbol = aapl
+    { symbol = aapl_id
     ; bbo =
         { bid =
             Some { price = Price.of_int_cents 14990; size = Size.of_int 100 }
@@ -70,7 +74,7 @@ let bbo_event : Exchange_event.t =
 let fill_event : Exchange_event.t =
   Fill
     { fill_id = 1
-    ; symbol = aapl
+    ; symbol = aapl_id
     ; price = Price.of_int_cents 15000
     ; size = Size.of_int 50
     ; aggressor_client_order_id = Client_order_id.For_testing.of_int 1
@@ -89,7 +93,7 @@ let accepted_event : Exchange_event.t =
     ; participant = alice
     ; request =
         { client_order_id = Client_order_id.For_testing.of_int 1
-        ; symbol = aapl
+        ; symbol = aapl_id
         ; side = Buy
         ; price = Price.of_int_cents 15000
         ; size = Size.of_int 10
@@ -114,17 +118,17 @@ let%expect_test "feed_event forwards every event verbatim to on_event" =
   print_observed observed;
   [%expect
     {|
-    ((Best_bid_offer_update (symbol AAPL)
+    ((Best_bid_offer_update (symbol 0)
       (bbo
        ((bid (((price 14990) (size 100)))) (ask (((price 15010) (size 200)))))))
      (Fill
-      ((fill_id 1) (symbol AAPL) (price 15000) (size 50) (aggressor_order_id 1)
+      ((fill_id 1) (symbol 0) (price 15000) (size 50) (aggressor_order_id 1)
        (aggressor_client_order_id 1) (aggressor_participant Alice)
        (aggressor_side Buy) (resting_order_id 2) (resting_client_order_id 1)
        (resting_participant Bob)))
      (Order_accept (order_id 1) (participant Alice)
       (request
-       ((client_order_id 1) (symbol AAPL) (side Buy) (price 15000) (size 10)
+       ((client_order_id 1) (symbol 0) (side Buy) (price 15000) (size 10)
         (time_in_force Day)))))
     |}];
   return ()

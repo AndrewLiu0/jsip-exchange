@@ -3,7 +3,7 @@ open Jsip_types
 
 module Trade_report = struct
   type t =
-    { symbol : Symbol.t
+    { symbol : Symbol_id.t
     ; price : Price.t
     ; size : Size.t
     }
@@ -120,13 +120,13 @@ let apply_execution
 ;;
 
 type t =
-  { positions : Position.t Symbol.Map.t Participant.Map.t
-  ; references : Price.t Symbol.Map.t
+  { positions : Position.t Symbol_id.Map.t Participant.Map.t
+  ; references : Price.t Symbol_id.Map.t
   }
 [@@deriving sexp_of]
 
 let empty =
-  { positions = Participant.Map.empty; references = Symbol.Map.empty }
+  { positions = Participant.Map.empty; references = Symbol_id.Map.empty }
 ;;
 
 let position t participant symbol =
@@ -138,7 +138,7 @@ let position t participant symbol =
 let set_position t participant symbol position =
   let by_symbol =
     Map.find t.positions participant
-    |> Option.value ~default:Symbol.Map.empty
+    |> Option.value ~default:Symbol_id.Map.empty
   in
   let by_symbol = Map.set by_symbol ~key:symbol ~data:position in
   { t with positions = Map.set t.positions ~key:participant ~data:by_symbol }
@@ -189,7 +189,7 @@ let apply_trade_report t (report : Trade_report.t) =
 
 module Summary = struct
   type per_symbol =
-    { symbol : Symbol.t
+    { symbol : Symbol_id.t
     ; shares : int
     ; average_entry : float
     ; reference_price : float option
@@ -212,7 +212,7 @@ let cents_to_dollars cents = cents /. 100.
 let summary t participant =
   let by_symbol =
     Map.find t.positions participant
-    |> Option.value ~default:Symbol.Map.empty
+    |> Option.value ~default:Symbol_id.Map.empty
   in
   let per_symbol =
     Map.to_alist by_symbol

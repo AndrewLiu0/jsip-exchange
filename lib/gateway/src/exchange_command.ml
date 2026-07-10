@@ -12,8 +12,8 @@ end
 
 type t =
   | Submit of Order.Request.t
-  | Book of Symbol.t
-  | Subscribe of Symbol.t
+  | Book of Symbol_id.t
+  | Subscribe of Symbol_id.t
 [@@deriving sexp]
 
 let parse line : t Or_error.t =
@@ -50,9 +50,8 @@ let parse line : t Or_error.t =
             |> Or_error.tag ~tag:[%string "invalid price: %{price_str}"]
           in
           let%bind symbol =
-            Or_error.try_with (fun () -> Symbol.of_string symbol_str)
-            |> Or_error.tag
-                 ~tag:"invalid symbol: %{symbol_str}\nexception: %{exn_str}"
+            Or_error.try_with (fun () -> Symbol_id.of_string symbol_str)
+            |> Or_error.tag ~tag:[%string "invalid symbol id: %{symbol_str}"]
           in
           let%bind time_in_force, rest' =
             match rest with
@@ -91,11 +90,20 @@ let parse line : t Or_error.t =
                [%{enumerate_tif}]"])
      | Book ->
        (match rest with
-        | symbol_str :: [] -> Ok (Book (Symbol.of_string symbol_str) : t)
-        | _ -> Or_error.error_string "expected a symbol")
+        | symbol_str :: [] ->
+          let%bind symbol =
+            Or_error.try_with (fun () -> Symbol_id.of_string symbol_str)
+            |> Or_error.tag ~tag:[%string "invalid symbol id: %{symbol_str}"]
+          in
+          Ok (Book symbol : t)
+        | _ -> Or_error.error_string "expected a symbol id")
      | Subscribe ->
        (match rest with
         | symbol_str :: [] ->
-          Ok (Subscribe (Symbol.of_string symbol_str) : t)
-        | _ -> Or_error.error_string "expected a symbol"))
+          let%bind symbol =
+            Or_error.try_with (fun () -> Symbol_id.of_string symbol_str)
+            |> Or_error.tag ~tag:[%string "invalid symbol id: %{symbol_str}"]
+          in
+          Ok (Subscribe symbol : t)
+        | _ -> Or_error.error_string "expected a symbol id"))
 ;;

@@ -17,7 +17,7 @@ module Request : sig
     (** The client's chosen order ID. Used by the client to refer to this
         order (e.g., to cancel it) without waiting for the exchange's
         response. *)
-    ; symbol : Symbol.t
+    ; symbol : Symbol_id.t
     ; side : Side.t
     ; price : Price.t
     ; size : Size.t (** Number of shares/units. Must be positive. *)
@@ -48,7 +48,7 @@ val create
 (** {2 Accessors} *)
 
 val order_id : t -> Order_id.t
-val symbol : t -> Symbol.t
+val symbol : t -> Symbol_id.t
 val participant : t -> Participant.t
 val side : t -> Side.t
 val price : t -> Price.t

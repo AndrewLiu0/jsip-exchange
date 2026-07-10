@@ -41,12 +41,12 @@ let parse_command line =
                [%string "invalid price: %{price_str}\nexception: %{exn_str}"]
          in
          let%bind symbol =
-           try Ok (Symbol.of_string symbol_str) with
+           try Ok (Symbol_id.of_string symbol_str) with
            | exn ->
              let exn_str = Exn.to_string exn in
              Error
                [%string
-                 "invalid symbol: %{symbol_str}\nexception: %{exn_str}"]
+                 "invalid symbol id: %{symbol_str}\nexception: %{exn_str}"]
          in
          let%bind time_in_force, rest =
            match rest with
@@ -87,7 +87,7 @@ let format_event = function
     sprintf
       "ACCEPTED id=%s %s %s %d@%s %s"
       (Order_id.to_string order_id)
-      (Symbol.to_string request.symbol)
+      (Symbol_id.to_string request.symbol)
       (Side.to_string request.side)
       (Size.to_int request.size)
       (Price.to_string_dollar request.price)
@@ -104,7 +104,7 @@ let format_event = function
     sprintf
       "CANCELLED id=%s %s remaining=%d reason=%s"
       (Order_id.to_string order_id)
-      (Symbol.to_string symbol)
+      (Symbol_id.to_string symbol)
       (Size.to_int remaining_size)
       (Cancel_reason.to_string reason)
   | Cancel_reject { participant; client_order_id; reason } ->
@@ -116,7 +116,7 @@ let format_event = function
   | Order_reject { participant = _; request; reason } ->
     sprintf
       "REJECTED %s %s %d@%s reason=%s"
-      (Symbol.to_string request.symbol)
+      (Symbol_id.to_string request.symbol)
       (Side.to_string request.side)
       (Size.to_int request.size)
       (Price.to_string_dollar request.price)
@@ -124,10 +124,10 @@ let format_event = function
   | Best_bid_offer_update { symbol; bbo } ->
     let bid = Level.opt_to_string bbo.bid in
     let ask = Level.opt_to_string bbo.ask in
-    [%string "BBO %{symbol#Symbol} bid=%{bid} ask=%{ask}"]
+    [%string "BBO %{symbol#Symbol_id} bid=%{bid} ask=%{ask}"]
   | Trade_report { symbol; price; size } ->
     let size = Size.to_int size in
-    [%string "TRADE %{symbol#Symbol} %{price#Price} x%{size#Int}"]
+    [%string "TRADE %{symbol#Symbol_id} %{price#Price} x%{size#Int}"]
 ;;
 
 let format_events events =

@@ -42,6 +42,26 @@ module Context : sig
       one-way shape as [submit]: success/failure of the cancel attempt
       arrives as an event on the session feed. *)
   val cancel : t -> Client_order_id.t -> unit Deferred.Or_error.t
+
+  (** {2 Symbol directory}
+
+      Bot configs and the oracle speak symbol names; the wire speaks
+      {!Symbol_id.t}. These resolve between the two using the directory
+      mirror supplied at construction time (the runner fetches it from the
+      exchange once, before any bot starts). *)
+
+  (** The id [symbol] trades under, or [None] if the exchange doesn't trade
+      it. *)
+  val symbol_id : t -> Symbol.t -> Symbol_id.t option
+
+  (** Like {!symbol_id}, but raises. For symbols out of the bot's own config,
+      which are expected to be traded — a [None] there is a scenario wiring
+      bug, not a runtime condition to handle. *)
+  val symbol_id_exn : t -> Symbol.t -> Symbol_id.t
+
+  (** The name behind a wire id (e.g. a {!Fill.t}'s symbol), or [None] for an
+      id the directory doesn't know. *)
+  val symbol_name : t -> Symbol_id.t -> Symbol.t option
 end
 
 module type Bot = sig
@@ -84,6 +104,8 @@ val create
   -> rng:Splittable_random.t
   -> submit:(Order.Request.t -> unit Deferred.Or_error.t)
   -> cancel:(Client_order_id.t -> unit Deferred.Or_error.t)
+  -> symbol_id:(Symbol.t -> Symbol_id.t option)
+  -> symbol_name:(Symbol_id.t -> Symbol.t option)
   -> tick_interval:Time_ns.Span.t
   -> t
 

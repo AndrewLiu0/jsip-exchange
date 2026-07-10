@@ -6,13 +6,20 @@
 
 open! Core
 open! Async
-open Jsip_types
 
 type t
 
-(** Start a server on the given port with the given symbols. Returns the
-    server handle and the port it is actually listening on (useful when you
-    pass port 0 to get an OS-assigned port).
+(** Start a server on the given port trading the symbols in [directory].
+    Returns the server handle and the port it is actually listening on
+    (useful when you pass port 0 to get an OS-assigned port).
+
+    The caller builds the directory (e.g. [Symbol_directory.of_symbols] in
+    the server binary's [main]) and it is authoritative for the whole run:
+    the engine's books are indexed by the ids it assigned, and consumers
+    mirror it to resolve names. It is passed in rather than built here —
+    unlike the participant registry, which [start] creates itself — because
+    the id assignment is public information that callers may need before the
+    server exists (e.g. to describe scenarios).
 
     [stats_period] (default 1s) is how often the server publishes a
     {!Jsip_stats.Snapshot.t} on {!Jsip_stats.Stats_protocol.stats_rpc}; tests
@@ -28,7 +35,7 @@ val start
   :  ?stats_period:Time_ns.Span.t
   -> ?http_port:int
   -> ?http_handler:Rpc_websocket.Rpc.http_handler
-  -> symbols:Symbol.t list
+  -> directory:Symbol_directory.t
   -> port:int
   -> unit
   -> t Deferred.t

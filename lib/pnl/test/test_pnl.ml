@@ -26,7 +26,7 @@ let print_summary label t participant =
   List.iter summary.per_symbol ~f:(fun row ->
     printf
       "  %s: shares=%d avg=$%.2f ref=%s realized=$%.2f unrealized=$%.2f\n"
-      (Symbol.to_string row.symbol)
+      (Symbol_id.to_string row.symbol)
       row.shares
       row.average_entry
       (Option.value_map
@@ -55,21 +55,21 @@ let%expect_test "build, blend, partially close, then mark" =
           ~aggressor:Harness.alice
           ~aggressor_side:Buy
           ~resting:Harness.market_maker
-          ~symbol:Harness.aapl
+          ~symbol:Harness.aapl_id
           ~price_cents:15000
           ~size:100
       ; fill
           ~aggressor:Harness.alice
           ~aggressor_side:Buy
           ~resting:Harness.market_maker
-          ~symbol:Harness.aapl
+          ~symbol:Harness.aapl_id
           ~price_cents:16000
           ~size:100
       ; fill
           ~aggressor:Harness.alice
           ~aggressor_side:Sell
           ~resting:Harness.market_maker
-          ~symbol:Harness.aapl
+          ~symbol:Harness.aapl_id
           ~price_cents:17000
           ~size:40
       ]
@@ -78,7 +78,7 @@ let%expect_test "build, blend, partially close, then mark" =
     Pnl.apply_trade_report
       pnl
       (Pnl.Trade_report.create
-         ~symbol:Harness.aapl
+         ~symbol:Harness.aapl_id
          ~price:(Price.of_int_cents 18000)
          ~size:(Size.of_int 10))
   in
@@ -87,10 +87,10 @@ let%expect_test "build, blend, partially close, then mark" =
   [%expect
     {|
     alice
-      AAPL: shares=160 avg=$155.00 ref=$180.00 realized=$600.00 unrealized=$4000.00
+      0: shares=160 avg=$155.00 ref=$180.00 realized=$600.00 unrealized=$4000.00
       TOTAL: realized=$600.00 unrealized=$4000.00 pnl=$4600.00
     market_maker
-      AAPL: shares=-160 avg=$155.00 ref=$180.00 realized=$-600.00 unrealized=$-4000.00
+      0: shares=-160 avg=$155.00 ref=$180.00 realized=$-600.00 unrealized=$-4000.00
       TOTAL: realized=$-600.00 unrealized=$-4000.00 pnl=$-4600.00
     |}]
 ;;

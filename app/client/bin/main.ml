@@ -34,9 +34,9 @@ let run_client ~host ~port ~participant_name =
     [%string
       {|
 Connected to exchange at %{host}:%{port#Int} as %{participant#Participant}
-Commands: BUY|SELL <symbol> <size> <price> %{enumerate_tif}
-          BOOK <symbol>
-          SUBSCRIBE <symbol>  (stream market data)
+Commands: BUY|SELL <client_order_id> <symbol-id> <size> <price> %{enumerate_tif}
+          BOOK <symbol-id>
+          SUBSCRIBE <symbol-id>  (stream market data)
 
 Order acknowledgements, fills, and cancellations are temporarily printed
 by the server process; the SUBSCRIBE command attaches you to a per-symbol
@@ -83,7 +83,8 @@ market-data feed.|}];
           in
           (match result with
            | None ->
-             print_endline [%string "No book available for %{symbol#Symbol}"]
+             print_endline
+               [%string "No book available for %{symbol#Symbol_id}"]
            | Some result -> print_endline (Book.to_string result));
           loop ()
         | Ok (Subscribe symbol) ->
@@ -102,7 +103,7 @@ market-data feed.|}];
              print_endline
                [%string
                  {|
-  Subscribed to %{symbol#Symbol} market data. Updates will appear below.
+  Subscribed to %{symbol#Symbol_id} market data. Updates will appear below.
   Continue entering commands as normal.|}];
              (* Read market data in the background; the command loop
                 continues running concurrently. *)

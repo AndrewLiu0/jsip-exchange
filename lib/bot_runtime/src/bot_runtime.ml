@@ -10,6 +10,8 @@ module Context = struct
     ; rng : Splittable_random.t
     ; dispatch_submit : Order.Request.t -> unit Deferred.Or_error.t
     ; dispatch_cancel : Client_order_id.t -> unit Deferred.Or_error.t
+    ; symbol_id : Symbol.t -> Symbol_id.t option
+    ; symbol_name : Symbol_id.t -> Symbol.t option
     }
 
   let participant t = t.participant
@@ -17,6 +19,19 @@ module Context = struct
   let random t = t.rng
   let submit t request = t.dispatch_submit request
   let cancel t client_order_id = t.dispatch_cancel client_order_id
+  let symbol_id t symbol = t.symbol_id symbol
+
+  let symbol_id_exn t symbol =
+    match t.symbol_id symbol with
+    | Some id -> id
+    | None ->
+      raise_s
+        [%message
+          "Context.symbol_id_exn: symbol is not traded on this exchange"
+            (symbol : Symbol.t)]
+  ;;
+
+  let symbol_name t id = t.symbol_name id
 end
 
 module type Bot = sig
@@ -58,6 +73,8 @@ let create
   ~rng
   ~submit
   ~cancel
+  ~symbol_id
+  ~symbol_name
   ~tick_interval
   =
   let context : Context.t =
@@ -66,6 +83,8 @@ let create
     ; rng
     ; dispatch_submit = submit
     ; dispatch_cancel = cancel
+    ; symbol_id
+    ; symbol_name
     }
   in
   { context; bot = Packed { bot = bot_module; config }; tick_interval }

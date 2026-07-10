@@ -8,6 +8,7 @@
 module Protocol = Protocol
 module Rpc_protocol = Rpc_protocol
 module Participant_id = Participant_id
+module Symbol_directory = Symbol_directory
 module Session = Session
 module Dispatcher = Dispatcher
 module Stats_recorder = Stats_recorder

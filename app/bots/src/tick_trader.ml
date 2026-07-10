@@ -44,7 +44,7 @@ let on_tick (config : Config.t) (context : Context.t) =
   in
   let request : Order.Request.t =
     { client_order_id
-    ; symbol = config.symbol
+    ; symbol = Context.symbol_id_exn context config.symbol
     ; side
     ; price = Price.of_int_cents (base_cents + jitter)
     ; size = Size.of_int config.order_size

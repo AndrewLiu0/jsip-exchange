@@ -38,13 +38,13 @@ open Jsip_types
     {!Exchange_event.t}, which is where these come from on the wire. *)
 module Trade_report : sig
   type t =
-    { symbol : Symbol.t
+    { symbol : Symbol_id.t
     ; price : Price.t
     ; size : Size.t
     }
   [@@deriving sexp_of]
 
-  val create : symbol:Symbol.t -> price:Price.t -> size:Size.t -> t
+  val create : symbol:Symbol_id.t -> price:Price.t -> size:Size.t -> t
 
   (** Extract a trade print from an exchange event, or [None] if the event is
       not a [Trade_report]. Lets you drive {!apply_trade_report} straight off
@@ -69,7 +69,7 @@ end
 (** A rendered snapshot of one participant's P&L, in dollars. *)
 module Summary : sig
   type per_symbol =
-    { symbol : Symbol.t
+    { symbol : Symbol_id.t
     ; shares : int
     ; average_entry : float (** Dollars per share. *)
     ; reference_price : float option
@@ -104,7 +104,7 @@ val apply_trade_report : t -> Trade_report.t -> t
 
 (** The current open position for a participant and symbol, or
     {!Position.flat} if none has been established. *)
-val position : t -> Participant.t -> Symbol.t -> Position.t
+val position : t -> Participant.t -> Symbol_id.t -> Position.t
 
 (** Render a participant's per-symbol breakdown and totals. Symbols with no
     activity for this participant are omitted. *)

@@ -11,64 +11,41 @@ module Order_key = struct
   include Comparable.Make (T)
 end
 
-(** Interns each traded symbol to a dense int id at engine creation: the id
-    is the symbol's index into [books], so resolving a symbol costs one hash
-    plus an array read instead of the O(log n) string comparisons of the
-    [Symbol.Map.t] this replaces. The symbol set is fixed for the engine's
-    lifetime, so ids never move. *)
-module Symbol_registry : sig
-  type t [@@deriving sexp_of]
-
-  (** One book per symbol, id = position in the list. Raises on duplicate
-      symbols (as [Symbol.Map.of_alist_exn] did before). *)
-  val create : Symbol.t list -> t
-
-  (** The book for [symbol], or [None] if it isn't traded here. *)
-  val find : t -> Symbol.t -> Order_book.t option
-
-  (** Like [find], but raises. For symbols taken from this engine's own
-      orders, which are always traded. *)
-  val find_exn : t -> Symbol.t -> Order_book.t
-end = struct
-  type t =
-    { ids : int Symbol.Table.t
-    ; books : Order_book.t array
-    }
-  [@@deriving sexp_of]
-
-  let create symbols =
-    let ids = Symbol.Table.create () in
-    List.iteri symbols ~f:(fun id symbol ->
-      Hashtbl.add_exn ids ~key:symbol ~data:id);
-    { ids; books = Array.of_list (List.map symbols ~f:Order_book.create) }
-  ;;
-
-  let find t symbol =
-    match Hashtbl.find t.ids symbol with
-    | None -> None
-    | Some id -> Some t.books.(id)
-  ;;
-
-  let find_exn t symbol = t.books.(Hashtbl.find_exn t.ids symbol)
-end
-
 type t =
-  { registry : Symbol_registry.t
+  { books : Order_book.t array
+  (** One book per symbol, indexed by {!Symbol_id.t}: the id on the wire is
+      the array index, so resolving a symbol costs a bounds check plus an
+      array read. (Exercise 2 kept a symbol->id hashtable here; the client
+      now sends the id itself, so the hash step is gone entirely.) *)
   ; order_id_gen : Order_id.Generator.t
   ; mutable next_fill_id : int
   ; mutable client_order_id_to_order : Order.t Order_key.Map.t
   }
 [@@deriving sexp_of]
 
-let create symbols =
-  { registry = Symbol_registry.create symbols
+let create ~num_symbols =
+  { books =
+      Array.init num_symbols ~f:(fun id ->
+        Order_book.create (Symbol_id.of_int_exn id))
   ; order_id_gen = Order_id.Generator.create ()
   ; next_fill_id = 1
   ; client_order_id_to_order = Order_key.Map.empty
   }
 ;;
 
-let book t symbol = Symbol_registry.find t.registry symbol
+(* The book for [id], or [None] if this engine doesn't trade it. [id] arrives
+   off the wire, where bin_io can deserialize ANY int — negative included —
+   so this lookup is the server's whole defense against a malformed or
+   hostile id: it must never let an out-of-range value reach the array index. *)
+let find_book t (id : Symbol_id.t) : Order_book.t option =
+  let books = t.books in
+  let index = Symbol_id.to_int id in
+  if index < 0 || index >= Array.length books
+  then None
+  else Some books.(index)
+;;
+
+let book t id = find_book t id
 
 (** Run the matching loop: repeatedly find a compatible resting order and
     fill against it. Returns the list of Fill and Trade_report events
@@ -127,7 +104,7 @@ let submit t ~participant (request : Order.Request.t) =
         { participant; request; reason = "duplicate client order id" }
     ]
   else (
-    match Symbol_registry.find t.registry request.symbol with
+    match find_book t request.symbol with
     | None ->
       [ Exchange_event.Order_reject
           { participant; request; reason = "unknown symbol" }
@@ -201,7 +178,9 @@ let cancel
   match Map.find t.client_order_id_to_order order_key with
   | None -> [ order_not_found ~participant ~client_order_id ]
   | Some order ->
-    let book = Symbol_registry.find_exn t.registry (Order.symbol order) in
+    (* Direct index, no bounds check: the id was validated by [find_book]
+       when this order was submitted, and the book array never shrinks. *)
+    let book = t.books.(Symbol_id.to_int (Order.symbol order)) in
     (match Order_book.find book (Order.order_id order) with
      | None ->
        (* The order was submitted under this [(participant, client_order_id)]

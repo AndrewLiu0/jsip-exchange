@@ -11,6 +11,10 @@ let aapl = Symbol.of_string "AAPL"
 let msft = Symbol.of_string "MSFT"
 let alice = Participant.of_string "Alice"
 
+(* Wire values carry ids; [make_recording_bot] gives the symbol at list
+   position [i] the id [i], so [aapl] (always first) is id 0. *)
+let aapl_id = Symbol_id.of_int_exn 0
+
 (* A flat, deterministic oracle: every symbol sits at [initial_price_cents]
    and never moves (zero volatility, zero mean reversion). Because we drive
    [on_tick] by hand and never advance the oracle, the fundamental stays put,
@@ -52,12 +56,15 @@ let make_recording_bot
       (oracle_config ~symbols ~initial_price_cents)
       ~seed:42
   in
+  let directory = Jsip_gateway.Symbol_directory.of_symbols symbols in
   let bot =
     Bot_runtime.create
       bot_module
       config
       ~participant:alice
       ~oracle
+      ~symbol_id:(Jsip_gateway.Symbol_directory.id directory)
+      ~symbol_name:(Jsip_gateway.Symbol_directory.name directory)
       ~rng:(Splittable_random.of_int 7)
       ~submit
       ~cancel
@@ -70,7 +77,7 @@ let print_submitted (submitted : Order.Request.t list ref) =
   let recent = List.rev !submitted in
   List.iter recent ~f:(fun req ->
     printf
-      !"%{Side} %{Symbol} %d@%{Price#dollar} %{Time_in_force}\n"
+      !"%{Side} %{Symbol_id} %d@%{Price#dollar} %{Time_in_force}\n"
       req.side
       req.symbol
       (Size.to_int req.size)
@@ -104,7 +111,7 @@ let%expect_test "make_recording_bot wires up a runnable bot" =
          ; participant = alice
          ; request =
              { client_order_id = Client_order_id.of_int 1
-             ; symbol = aapl
+             ; symbol = aapl_id
              ; side = Buy
              ; price = Price.of_int_cents 15000
              ; size = Size.of_int 10
@@ -119,7 +126,7 @@ let%expect_test "make_recording_bot wires up a runnable bot" =
 
 let bbo_event : Exchange_event.t =
   Best_bid_offer_update
-    { symbol = aapl
+    { symbol = aapl_id
     ; bbo =
         { bid =
             Some { price = Price.of_int_cents 14990; size = Size.of_int 100 }
@@ -196,14 +203,14 @@ let%expect_test "book filler piles resting, non-marketable Day orders" =
   print_submitted submitted;
   [%expect
     {|
-    BUY AAPL 10@$149.50 DAY
-    SELL AAPL 10@$150.50 DAY
-    BUY AAPL 10@$149.50 DAY
-    SELL AAPL 10@$150.50 DAY
-    BUY AAPL 10@$149.50 DAY
-    SELL AAPL 10@$150.50 DAY
-    BUY AAPL 10@$149.50 DAY
-    SELL AAPL 10@$150.50 DAY
+    BUY 0 10@$149.50 DAY
+    SELL 0 10@$150.50 DAY
+    BUY 0 10@$149.50 DAY
+    SELL 0 10@$150.50 DAY
+    BUY 0 10@$149.50 DAY
+    SELL 0 10@$150.50 DAY
+    BUY 0 10@$149.50 DAY
+    SELL 0 10@$150.50 DAY
     |}];
   (* Every order must carry a fresh client_order_id, so none is rejected as a
      duplicate. Two ticks of 4 orders => 8 orders, 8 distinct ids. *)
@@ -278,7 +285,7 @@ let print_per_tick ~tick ~sent_this_tick =
 let print_orders_with_ids (submitted : Order.Request.t list ref) =
   List.iter (List.rev !submitted) ~f:(fun (req : Order.Request.t) ->
     printf
-      !"%{Symbol} %{Side} %d@%{Price#dollar} coid=%{Client_order_id}\n"
+      !"%{Symbol_id} %{Side} %d@%{Price#dollar} coid=%{Client_order_id}\n"
       req.symbol
       req.side
       (Size.to_int req.size)
@@ -302,10 +309,10 @@ let%expect_test "a burst targets every configured symbol with fresh ids" =
      fundamental at $149.50; every id is distinct. *)
   [%expect
     {|
-    AAPL BUY 10@$149.50 coid=1
-    AAPL BUY 10@$149.50 coid=2
-    MSFT BUY 10@$149.50 coid=3
-    MSFT BUY 10@$149.50 coid=4
+    0 BUY 10@$149.50 coid=1
+    0 BUY 10@$149.50 coid=2
+    1 BUY 10@$149.50 coid=3
+    1 BUY 10@$149.50 coid=4
     |}];
   return ()
 ;;
@@ -320,7 +327,7 @@ let print_storm_activity
   =
   List.iter (List.rev !submitted) ~f:(fun (req : Order.Request.t) ->
     printf
-      !"submit %{Client_order_id}: %{Side} %{Symbol} %d@%{Price#dollar}\n"
+      !"submit %{Client_order_id}: %{Side} %{Symbol_id} %d@%{Price#dollar}\n"
       req.client_order_id
       req.side
       req.symbol
@@ -352,8 +359,8 @@ let%expect_test "cancel storm: fresh submit/cancel pairs every tick" =
   print_storm_activity ~submitted ~cancelled;
   [%expect
     {|
-    submit 0: BUY AAPL 1@$149.50
-    submit 1: BUY AAPL 1@$149.50
+    submit 0: BUY 0 1@$149.50
+    submit 1: BUY 0 1@$149.50
     cancel 0
     cancel 1
     |}];
@@ -363,10 +370,10 @@ let%expect_test "cancel storm: fresh submit/cancel pairs every tick" =
   print_storm_activity ~submitted ~cancelled;
   [%expect
     {|
-    submit 0: BUY AAPL 1@$149.50
-    submit 1: BUY AAPL 1@$149.50
-    submit 2: BUY AAPL 1@$149.50
-    submit 3: BUY AAPL 1@$149.50
+    submit 0: BUY 0 1@$149.50
+    submit 1: BUY 0 1@$149.50
+    submit 2: BUY 0 1@$149.50
+    submit 3: BUY 0 1@$149.50
     cancel 0
     cancel 1
     cancel 2
@@ -388,10 +395,10 @@ let%expect_test "cancel storm: sell side prices above the fundamental" =
   print_storm_activity ~submitted ~cancelled;
   [%expect
     {|
-    submit 0: SELL AAPL 1@$150.50
-    submit 1: SELL AAPL 1@$150.50
-    submit 2: SELL AAPL 1@$150.50
-    submit 3: SELL AAPL 1@$150.50
+    submit 0: SELL 0 1@$150.50
+    submit 1: SELL 0 1@$150.50
+    submit 2: SELL 0 1@$150.50
+    submit 3: SELL 0 1@$150.50
     cancel 0
     cancel 1
     cancel 2

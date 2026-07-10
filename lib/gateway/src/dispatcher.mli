@@ -2,9 +2,9 @@
 
     Owns subscription registries:
 
-    - **Market-data subscribers**, keyed by [Symbol.t]. Each subscriber gets
-      a pipe of [Best_bid_offer_update] and [Trade_report] events for the
-      symbol they asked about. This is the public market-data feed.
+    - **Market-data subscribers**, keyed by {!Symbol_id.t}. Each subscriber
+      gets a pipe of [Best_bid_offer_update] and [Trade_report] events for
+      the symbol they asked about. This is the public market-data feed.
 
     - **Audit subscribers**, an unfiltered firehose of every event the
       matching engine produces. Intended for the exchange operator's monitor;
@@ -25,17 +25,22 @@ type t
     keyed by {!Participant_id.t}, so dispatching an event resolves the
     participant name it carries to an id first. Events for a participant with
     no live session fall back to stdout (the server binary prints them; tests
-    silence them). *)
-val create : Participant_id.Registry.t -> t
+    silence them).
 
-(** Subscribe to public market data for one or more [symbols]. The same pipe
+    The directory resolves symbol ids back to names at the stats-snapshot
+    edge (see {!market_data_queue_lengths}) and validates subscription
+    requests. *)
+val create : Participant_id.Registry.t -> directory:Symbol_directory.t -> t
+
+(** Subscribe to public market data for one or more symbol ids. The same pipe
     receives events for every requested symbol; the dispatcher avoids
     duplicates so a subscriber listed against multiple symbols only sees each
-    event once. The pipe is removed from the dispatcher when its reader is
-    closed. *)
+    event once. Ids the directory doesn't know are ignored — they can never
+    match an event, so subscribing to them would only leak table entries. The
+    pipe is removed from the dispatcher when its reader is closed. *)
 val subscribe_market_data
   :  t
-  -> Symbol.t list
+  -> Symbol_id.t list
   -> Exchange_event.t Pipe.Reader.t
 
 (** Subscribe to the full unfiltered event firehose. Intended for the monitor
@@ -67,7 +72,9 @@ val register_session : t -> Session.t -> unit Or_error.t
     dispatch writes without pushback. Results are sorted by symbol /
     participant so snapshots are deterministic. *)
 
-(** Per symbol, one length per market-data subscriber pipe. *)
+(** Per symbol, one length per market-data subscriber pipe. Speaks names: ids
+    are resolved through the directory at this edge, so the stats stream (and
+    the dashboard reading it) never sees a raw id. *)
 val market_data_queue_lengths : t -> (Symbol.t * int list) list
 
 (** One length per audit-log subscriber pipe. *)

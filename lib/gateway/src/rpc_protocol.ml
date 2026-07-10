@@ -24,7 +24,7 @@ let book_query_rpc =
   Rpc.Rpc.create
     ~name:"book-query"
     ~version:1
-    ~bin_query:Symbol.bin_t
+    ~bin_query:Symbol_id.bin_t
     ~bin_response:[%bin_type_class: Book.t option]
     ~include_in_error_count:Only_on_exn
 ;;
@@ -42,7 +42,7 @@ let market_data_rpc =
   Rpc.Pipe_rpc.create
     ~name:"market-data"
     ~version:1
-    ~bin_query:[%bin_type_class: Symbol.t list]
+    ~bin_query:[%bin_type_class: Symbol_id.t list]
     ~bin_response:Exchange_event.bin_t
     ~bin_error:Error.bin_t
     ()

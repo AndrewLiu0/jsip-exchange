@@ -88,34 +88,39 @@ let start_matching_loop
    resting orders) once per stats period — the same cost class as the
    [Gc.stat] heap walk below, and only at snapshot cadence, never on the
    matching path. *)
-let resting_orders_by_participant ~engine ~symbols =
+let resting_orders_by_participant ~engine ~directory =
   let totals = Participant.Table.create () in
-  List.iter symbols ~f:(fun symbol ->
-    match Matching_engine.book engine symbol with
-    | None -> ()
-    | Some book ->
-      List.iter Side.all ~f:(fun side ->
-        List.iter (Order_book.orders_on_side book side) ~f:(fun order ->
-          Hashtbl.update totals (Order.participant order) ~f:(fun existing ->
-            let { Snapshot.Resting_orders.order_count; total_shares } =
-              Option.value
-                existing
-                ~default:
-                  { Snapshot.Resting_orders.order_count = 0
-                  ; total_shares = Size.zero
-                  }
-            in
-            { Snapshot.Resting_orders.order_count = order_count + 1
-            ; total_shares =
-                Size.( + ) total_shares (Order.remaining_size order)
-            }))));
+  List.iter
+    (Symbol_directory.to_alist directory)
+    ~f:(fun ((_ : Symbol.t), symbol_id) ->
+      match Matching_engine.book engine symbol_id with
+      | None -> ()
+      | Some book ->
+        List.iter Side.all ~f:(fun side ->
+          List.iter (Order_book.orders_on_side book side) ~f:(fun order ->
+            Hashtbl.update
+              totals
+              (Order.participant order)
+              ~f:(fun existing ->
+                let { Snapshot.Resting_orders.order_count; total_shares } =
+                  Option.value
+                    existing
+                    ~default:
+                      { Snapshot.Resting_orders.order_count = 0
+                      ; total_shares = Size.zero
+                      }
+                in
+                { Snapshot.Resting_orders.order_count = order_count + 1
+                ; total_shares =
+                    Size.( + ) total_shares (Order.remaining_size order)
+                }))));
   Hashtbl.to_alist totals
   |> List.sort ~compare:(fun (p1, _) (p2, _) -> Participant.compare p1 p2)
 ;;
 
 let build_snapshot
   ~engine
-  ~symbols
+  ~directory
   ~dispatcher
   ~stats_recorder
   ~request_writer
@@ -137,7 +142,7 @@ let build_snapshot
   ; reject_counts = Stats_recorder.take_reject_counts stats_recorder
   ; participant_activity =
       Stats_recorder.take_participant_activity stats_recorder
-  ; resting_orders = resting_orders_by_participant ~engine ~symbols
+  ; resting_orders = resting_orders_by_participant ~engine ~directory
   }
 ;;
 
@@ -160,15 +165,20 @@ let start
   ?(stats_period = default_stats_period)
   ?http_port
   ?http_handler
-  ~symbols
+  ~directory
   ~port
   ()
   =
-  let engine = Matching_engine.create symbols in
+  (* The engine indexes books by the ids the directory assigned; it never
+     needs the names, just how many ids exist. *)
+  let engine =
+    Matching_engine.create
+      ~num_symbols:(Symbol_directory.num_symbols directory)
+  in
   (* One registry for the whole server: dispatcher and stats recorder key
      their participant tables by the ids it mints at login. *)
   let registry = Participant_id.Registry.create () in
-  let dispatcher = Dispatcher.create registry in
+  let dispatcher = Dispatcher.create registry ~directory in
   let stats_recorder = Stats_recorder.create registry in
   (* request_writer: network RPC handlers write incoming client requests here
      request_reader: the backend exexution engine consumes requests from this
@@ -289,7 +299,7 @@ let start
          stats_recorder
          (build_snapshot
             ~engine
-            ~symbols
+            ~directory
             ~dispatcher
             ~stats_recorder
             ~request_writer));
