@@ -7,7 +7,7 @@ open Jsip_test_harness
     matching-logic tests. *)
 let submit ?participant t request =
   let events = Harness.submit_quiet ?participant t request in
-  Harness.print_events ~show:Harness.Show.no_market_data events;
+  Harness.print_events ~show:Harness.Show.no_market_data t events;
   events
 ;;
 
@@ -28,7 +28,7 @@ let show_bbo =
 let%expect_test "single buy order, nothing to match" =
   let t = Harness.create () in
   submit_ t (Harness.buy ~price_cents:15000 ());
-  [%expect {| ACCEPTED id=1 0 BUY 100@$150.00 DAY |}]
+  [%expect {| ACCEPTED id=1 AAPL BUY 100@$150.00 DAY |}]
 ;;
 
 let%expect_test "two orders that don't cross" =
@@ -37,8 +37,8 @@ let%expect_test "two orders that don't cross" =
   submit_ ~participant:Harness.bob t (Harness.sell ~price_cents:15100 ());
   [%expect
     {|
-    ACCEPTED id=1 0 BUY 100@$150.00 DAY
-    ACCEPTED id=2 0 SELL 100@$151.00 DAY
+    ACCEPTED id=1 AAPL BUY 100@$150.00 DAY
+    ACCEPTED id=2 AAPL SELL 100@$151.00 DAY
     |}]
 ;;
 
@@ -48,9 +48,9 @@ let%expect_test "exact cross at same price" =
   submit_ t (Harness.buy ~price_cents:15000 ());
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 100@$150.00 DAY
-    ACCEPTED id=2 0 BUY 100@$150.00 DAY
-    FILL fill_id=1 0 $150.00 x100 aggressor=102|2(Alice) BUY resting=101|1(Bob)
+    ACCEPTED id=1 AAPL SELL 100@$150.00 DAY
+    ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
+    FILL fill_id=1 AAPL $150.00 x100 aggressor=102|2(Alice) BUY resting=101|1(Bob)
     |}]
 ;;
 
@@ -60,9 +60,9 @@ let%expect_test "buy crosses at resting price, not aggressor price" =
   submit_ t (Harness.buy ~price_cents:15100 ());
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 100@$150.00 DAY
-    ACCEPTED id=2 0 BUY 100@$151.00 DAY
-    FILL fill_id=1 0 $150.00 x100 aggressor=102|2(Alice) BUY resting=101|1(Bob)
+    ACCEPTED id=1 AAPL SELL 100@$150.00 DAY
+    ACCEPTED id=2 AAPL BUY 100@$151.00 DAY
+    FILL fill_id=1 AAPL $150.00 x100 aggressor=102|2(Alice) BUY resting=101|1(Bob)
     |}]
 ;;
 
@@ -75,15 +75,15 @@ let%expect_test "partial fill: buy is larger than resting sell" =
   submit_ t (Harness.buy ~price_cents:15000 ~size:100 ());
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 60@$150.00 DAY
-    ACCEPTED id=2 0 BUY 100@$150.00 DAY
-    FILL fill_id=1 0 $150.00 x60 aggressor=102|2(Alice) BUY resting=101|1(Bob)
+    ACCEPTED id=1 AAPL SELL 60@$150.00 DAY
+    ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
+    FILL fill_id=1 AAPL $150.00 x60 aggressor=102|2(Alice) BUY resting=101|1(Bob)
     |}];
   (* Remainder rests on the book *)
   Harness.print_book t Harness.aapl_id;
   [%expect
     {|
-    === 0 ===
+    === AAPL ===
       BIDS:
         $150.00 x40
       ASKS: (empty)
@@ -104,11 +104,11 @@ let%expect_test "aggressor sweeps multiple resting orders" =
   submit_ t (Harness.buy ~price_cents:15000 ~size:100 ());
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 50@$150.00 DAY
-    ACCEPTED id=2 0 SELL 80@$150.00 DAY
-    ACCEPTED id=3 0 BUY 100@$150.00 DAY
-    FILL fill_id=1 0 $150.00 x50 aggressor=103|3(Alice) BUY resting=101|1(Bob)
-    FILL fill_id=2 0 $150.00 x50 aggressor=103|3(Alice) BUY resting=102|2(Charlie)
+    ACCEPTED id=1 AAPL SELL 50@$150.00 DAY
+    ACCEPTED id=2 AAPL SELL 80@$150.00 DAY
+    ACCEPTED id=3 AAPL BUY 100@$150.00 DAY
+    FILL fill_id=1 AAPL $150.00 x50 aggressor=103|3(Alice) BUY resting=101|1(Bob)
+    FILL fill_id=2 AAPL $150.00 x50 aggressor=103|3(Alice) BUY resting=102|2(Charlie)
     |}]
 ;;
 
@@ -121,8 +121,8 @@ let%expect_test "IOC: no match means immediate cancel" =
   submit_ t (Harness.buy ~price_cents:15000 ~time_in_force:Ioc ());
   [%expect
     {|
-    ACCEPTED id=1 0 BUY 100@$150.00 IOC
-    CANCELLED id=1 0 remaining=100 reason=IOC_REMAINDER
+    ACCEPTED id=1 AAPL BUY 100@$150.00 IOC
+    CANCELLED id=1 AAPL remaining=100 reason=IOC_REMAINDER
     |}]
 ;;
 
@@ -135,10 +135,10 @@ let%expect_test "IOC: partial fill then cancel remainder" =
   submit_ t (Harness.buy ~price_cents:15000 ~size:100 ~time_in_force:Ioc ());
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 40@$150.00 DAY
-    ACCEPTED id=2 0 BUY 100@$150.00 IOC
-    FILL fill_id=1 0 $150.00 x40 aggressor=102|2(Alice) BUY resting=101|1(Bob)
-    CANCELLED id=2 0 remaining=60 reason=IOC_REMAINDER
+    ACCEPTED id=1 AAPL SELL 40@$150.00 DAY
+    ACCEPTED id=2 AAPL BUY 100@$150.00 IOC
+    FILL fill_id=1 AAPL $150.00 x40 aggressor=102|2(Alice) BUY resting=101|1(Bob)
+    CANCELLED id=2 AAPL remaining=60 reason=IOC_REMAINDER
     |}]
 ;;
 
@@ -151,9 +151,9 @@ let%expect_test "IOC: full fill means no cancel event" =
   submit_ t (Harness.buy ~price_cents:15000 ~size:100 ~time_in_force:Ioc ());
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 100@$150.00 DAY
-    ACCEPTED id=2 0 BUY 100@$150.00 IOC
-    FILL fill_id=1 0 $150.00 x100 aggressor=102|2(Alice) BUY resting=101|1(Bob)
+    ACCEPTED id=1 AAPL SELL 100@$150.00 DAY
+    ACCEPTED id=2 AAPL BUY 100@$150.00 IOC
+    FILL fill_id=1 AAPL $150.00 x100 aggressor=102|2(Alice) BUY resting=101|1(Bob)
     |}]
 ;;
 
@@ -163,9 +163,9 @@ let%expect_test "IOC: does not rest on book" =
   Harness.print_book t Harness.aapl_id;
   [%expect
     {|
-    ACCEPTED id=1 0 BUY 100@$150.00 IOC
-    CANCELLED id=1 0 remaining=100 reason=IOC_REMAINDER
-    === 0 ===
+    ACCEPTED id=1 AAPL BUY 100@$150.00 IOC
+    CANCELLED id=1 AAPL remaining=100 reason=IOC_REMAINDER
+    === AAPL ===
       BIDS: (empty)
       ASKS: (empty)
       BBO: - / -
@@ -181,7 +181,7 @@ let%expect_test "rejected: unknown symbol" =
   submit_
     t
     (Harness.buy ~price_cents:15000 ~symbol:(Symbol_id.of_int_exn 999) ());
-  [%expect {| REJECTED 999 BUY 100@$150.00 reason=unknown symbol |}]
+  [%expect {| REJECTED #999 BUY 100@$150.00 reason=unknown symbol |}]
 ;;
 
 let%expect_test "rejected: id one past the last book" =
@@ -192,7 +192,7 @@ let%expect_test "rejected: id one past the last book" =
   submit_
     t
     (Harness.buy ~price_cents:15000 ~symbol:(Symbol_id.of_int_exn 3) ());
-  [%expect {| REJECTED 3 BUY 100@$150.00 reason=unknown symbol |}]
+  [%expect {| REJECTED #3 BUY 100@$150.00 reason=unknown symbol |}]
 ;;
 
 let%expect_test "rejected: negative id off the wire" =
@@ -203,7 +203,7 @@ let%expect_test "rejected: negative id off the wire" =
   let t = Harness.create () in
   let hostile_id = [%of_sexp: Symbol_id.t] (Sexp.of_string "-1") in
   submit_ t (Harness.buy ~price_cents:15000 ~symbol:hostile_id ());
-  [%expect {| REJECTED -1 BUY 100@$150.00 reason=unknown symbol |}]
+  [%expect {| REJECTED #-1 BUY 100@$150.00 reason=unknown symbol |}]
 ;;
 
 (* ================================================================ *)
@@ -222,14 +222,14 @@ let%expect_test "orders for different symbols don't cross" =
   Harness.print_book t Harness.tsla_id;
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 100@$150.00 DAY
-    ACCEPTED id=2 1 BUY 100@$150.00 DAY
-    === 0 ===
+    ACCEPTED id=1 AAPL SELL 100@$150.00 DAY
+    ACCEPTED id=2 TSLA BUY 100@$150.00 DAY
+    === AAPL ===
       BIDS: (empty)
       ASKS:
         $150.00 x100
       BBO: - / $150.00 x100
-    === 1 ===
+    === TSLA ===
       BIDS:
         $150.00 x100
       ASKS: (empty)
@@ -268,10 +268,10 @@ let%expect_test "price priority: naive impl matches first-found, not best" =
      unnecessary cost! *)
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 100@$10.00 DAY
-    ACCEPTED id=2 0 SELL 100@$10.05 DAY
-    ACCEPTED id=3 0 BUY 100@$10.05 DAY
-    FILL fill_id=1 0 $10.00 x100 aggressor=103|3(Alice) BUY resting=101|1(Charlie)
+    ACCEPTED id=1 AAPL SELL 100@$10.00 DAY
+    ACCEPTED id=2 AAPL SELL 100@$10.05 DAY
+    ACCEPTED id=3 AAPL BUY 100@$10.05 DAY
+    FILL fill_id=1 AAPL $10.00 x100 aggressor=103|3(Alice) BUY resting=101|1(Charlie)
     |}]
 ;;
 
@@ -282,22 +282,22 @@ let%expect_test "price priority: naive impl matches first-found, not best" =
 let%expect_test "BBO update emitted when order rests on book" =
   let t = Harness.create () in
   let events = Harness.submit_quiet t (Harness.buy ~price_cents:15000 ()) in
-  Harness.print_events ~show:show_bbo events;
-  [%expect {| BBO 0 bid=$150.00 x100 ask=- |}];
+  Harness.print_events ~show:show_bbo t events;
+  [%expect {| BBO AAPL bid=$150.00 x100 ask=- |}];
   let events = Harness.submit_quiet t (Harness.sell ~price_cents:15100 ()) in
-  Harness.print_events ~show:show_bbo events;
-  [%expect {| BBO 0 bid=$150.00 x100 ask=$151.00 x100 |}]
+  Harness.print_events ~show:show_bbo t events;
+  [%expect {| BBO AAPL bid=$150.00 x100 ask=$151.00 x100 |}]
 ;;
 
 let%expect_test "BBO update: reflects new best after fill" =
   let t = Harness.create () in
   let events = Harness.submit_quiet t (Harness.sell ~price_cents:15000 ()) in
-  Harness.print_events ~show:show_bbo events;
-  [%expect {| BBO 0 bid=- ask=$150.00 x100 |}];
+  Harness.print_events ~show:show_bbo t events;
+  [%expect {| BBO AAPL bid=- ask=$150.00 x100 |}];
   let events = Harness.submit_quiet t (Harness.buy ~price_cents:15000 ()) in
-  Harness.print_events ~show:show_bbo events;
+  Harness.print_events ~show:show_bbo t events;
   (* Both sides empty after the cross *)
-  [%expect {| BBO 0 bid=- ask=- |}]
+  [%expect {| BBO AAPL bid=- ask=- |}]
 ;;
 
 let%expect_test "BBO update: not emitted when BBO unchanged" =
@@ -340,10 +340,11 @@ let%expect_test "trade report emitted for each fill" =
       (Harness.Show.only (function
         | Exchange_event.Trade_report _ -> true
         | _ -> false))
+    t
     events;
   [%expect {|
-    TRADE 0 $150.00 x50
-    TRADE 0 $150.00 x50
+    TRADE AAPL $150.00 x50
+    TRADE AAPL $150.00 x50
     |}]
 ;;
 
@@ -417,13 +418,13 @@ let%expect_test "scenario: two participants trade, book reflects state" =
   Harness.print_bbo t Harness.aapl_id;
   [%expect
     {|
-    ACCEPTED id=1 0 BUY 100@$149.90 DAY
-    ACCEPTED id=2 0 BUY 200@$149.80 DAY
-    ACCEPTED id=3 0 SELL 100@$150.10 DAY
-    ACCEPTED id=4 0 SELL 150@$150.20 DAY
-    ACCEPTED id=5 0 BUY 50@$150.10 DAY
-    FILL fill_id=1 0 $150.10 x50 aggressor=5|5(Charlie) BUY resting=3|3(Bob)
-    === 0 ===
+    ACCEPTED id=1 AAPL BUY 100@$149.90 DAY
+    ACCEPTED id=2 AAPL BUY 200@$149.80 DAY
+    ACCEPTED id=3 AAPL SELL 100@$150.10 DAY
+    ACCEPTED id=4 AAPL SELL 150@$150.20 DAY
+    ACCEPTED id=5 AAPL BUY 50@$150.10 DAY
+    FILL fill_id=1 AAPL $150.10 x50 aggressor=5|5(Charlie) BUY resting=3|3(Bob)
+    === AAPL ===
       BIDS:
         $149.90 x100
         $149.80 x200
@@ -431,7 +432,7 @@ let%expect_test "scenario: two participants trade, book reflects state" =
         $150.10 x50
         $150.20 x150
       BBO: $149.90 x100 / $150.10 x50
-    BBO 0: $149.90 x100 / $150.10 x50
+    BBO AAPL: $149.90 x100 / $150.10 x50
     |}]
 ;;
 
@@ -477,15 +478,15 @@ let%expect_test "scenario: aggressive IOC sweeps entire book" =
   Harness.print_book t Harness.aapl_id;
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 50@$150.00 DAY
-    ACCEPTED id=2 0 SELL 50@$150.10 DAY
-    ACCEPTED id=3 0 SELL 50@$150.20 DAY
-    ACCEPTED id=4 0 BUY 200@$150.20 IOC
-    FILL fill_id=1 0 $150.00 x50 aggressor=4|4(Alice) BUY resting=1|1(Bob)
-    FILL fill_id=2 0 $150.10 x50 aggressor=4|4(Alice) BUY resting=2|2(Charlie)
-    FILL fill_id=3 0 $150.20 x50 aggressor=4|4(Alice) BUY resting=3|3(Bob)
-    CANCELLED id=4 0 remaining=50 reason=IOC_REMAINDER
-    === 0 ===
+    ACCEPTED id=1 AAPL SELL 50@$150.00 DAY
+    ACCEPTED id=2 AAPL SELL 50@$150.10 DAY
+    ACCEPTED id=3 AAPL SELL 50@$150.20 DAY
+    ACCEPTED id=4 AAPL BUY 200@$150.20 IOC
+    FILL fill_id=1 AAPL $150.00 x50 aggressor=4|4(Alice) BUY resting=1|1(Bob)
+    FILL fill_id=2 AAPL $150.10 x50 aggressor=4|4(Alice) BUY resting=2|2(Charlie)
+    FILL fill_id=3 AAPL $150.20 x50 aggressor=4|4(Alice) BUY resting=3|3(Bob)
+    CANCELLED id=4 AAPL remaining=50 reason=IOC_REMAINDER
+    === AAPL ===
       BIDS: (empty)
       ASKS: (empty)
       BBO: - / -
@@ -505,9 +506,9 @@ let%expect_test "scenario: order IDs are globally sequential" =
     (Harness.buy ~price_cents:28000 ~symbol:Harness.goog_id ());
   [%expect
     {|
-    ACCEPTED id=1 0 BUY 100@$150.00 DAY
-    ACCEPTED id=2 1 SELL 100@$200.00 DAY
-    ACCEPTED id=3 2 BUY 100@$280.00 DAY
+    ACCEPTED id=1 AAPL BUY 100@$150.00 DAY
+    ACCEPTED id=2 TSLA SELL 100@$200.00 DAY
+    ACCEPTED id=3 GOOG BUY 100@$280.00 DAY
     |}]
 ;;
 
@@ -523,11 +524,11 @@ let%expect_test "scenario: fill IDs are globally sequential" =
   submit_ t (Harness.buy ~price_cents:20000 ~symbol:Harness.tsla_id ());
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 100@$150.00 DAY
-    ACCEPTED id=2 1 SELL 100@$200.00 DAY
-    ACCEPTED id=3 0 BUY 100@$150.00 DAY
-    FILL fill_id=1 0 $150.00 x100 aggressor=103|3(Alice) BUY resting=101|1(Bob)
-    ACCEPTED id=4 1 BUY 100@$200.00 DAY
-    FILL fill_id=2 1 $200.00 x100 aggressor=104|4(Alice) BUY resting=102|2(Charlie)
+    ACCEPTED id=1 AAPL SELL 100@$150.00 DAY
+    ACCEPTED id=2 TSLA SELL 100@$200.00 DAY
+    ACCEPTED id=3 AAPL BUY 100@$150.00 DAY
+    FILL fill_id=1 AAPL $150.00 x100 aggressor=103|3(Alice) BUY resting=101|1(Bob)
+    ACCEPTED id=4 TSLA BUY 100@$200.00 DAY
+    FILL fill_id=2 TSLA $200.00 x100 aggressor=104|4(Alice) BUY resting=102|2(Charlie)
     |}]
 ;;

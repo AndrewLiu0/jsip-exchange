@@ -16,7 +16,7 @@ type t =
   | Subscribe of Symbol_id.t
 [@@deriving sexp]
 
-let parse line : t Or_error.t =
+let parse ~lookup line : t Or_error.t =
   let parts = String.split line ~on:' ' in
   match parts with
   | [] -> Or_error.error_string "empty command"
@@ -50,8 +50,16 @@ let parse line : t Or_error.t =
             |> Or_error.tag ~tag:[%string "invalid price: %{price_str}"]
           in
           let%bind symbol =
-            Or_error.try_with (fun () -> Symbol_id.of_string symbol_str)
-            |> Or_error.tag ~tag:[%string "invalid symbol id: %{symbol_str}"]
+            (* Name -> id through the directory mirror: this is the moment
+               the human-typed symbol leaves the world of names. Uppercased
+               first so [buy 7 aapl ...] works, matching the BOOK and
+               SUBSCRIBE arms. *)
+            match
+              lookup (Symbol.of_string (String.uppercase symbol_str))
+            with
+            | Some symbol -> Ok symbol
+            | None ->
+              Or_error.error_string [%string "unknown symbol: %{symbol_str}"]
           in
           let%bind time_in_force, rest' =
             match rest with
@@ -91,19 +99,17 @@ let parse line : t Or_error.t =
      | Book ->
        (match rest with
         | symbol_str :: [] ->
-          let%bind symbol =
-            Or_error.try_with (fun () -> Symbol_id.of_string symbol_str)
-            |> Or_error.tag ~tag:[%string "invalid symbol id: %{symbol_str}"]
-          in
-          Ok (Book symbol : t)
-        | _ -> Or_error.error_string "expected a symbol id")
+          (match lookup (Symbol.of_string (String.uppercase symbol_str)) with
+           | Some symbol -> Ok (Book symbol : t)
+           | None ->
+             Or_error.error_string [%string "unknown symbol: %{symbol_str}"])
+        | _ -> Or_error.error_string "expected a symbol")
      | Subscribe ->
        (match rest with
         | symbol_str :: [] ->
-          let%bind symbol =
-            Or_error.try_with (fun () -> Symbol_id.of_string symbol_str)
-            |> Or_error.tag ~tag:[%string "invalid symbol id: %{symbol_str}"]
-          in
-          Ok (Subscribe symbol : t)
-        | _ -> Or_error.error_string "expected a symbol id"))
+          (match lookup (Symbol.of_string (String.uppercase symbol_str)) with
+           | Some symbol -> Ok (Subscribe symbol : t)
+           | None ->
+             Or_error.error_string [%string "unknown symbol: %{symbol_str}"])
+        | _ -> Or_error.error_string "expected a symbol"))
 ;;

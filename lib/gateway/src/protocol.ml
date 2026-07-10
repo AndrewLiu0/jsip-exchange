@@ -82,17 +82,86 @@ let parse_command line =
             [DAY|IOC]"))
 ;;
 
-let format_event = function
+(* Name recovery lives here, on the consumer side of the wire: the
+   [lib/types] renderers stay pure and print raw ids, while these formatters
+   resolve ids through the directory mirror the consumer fetched at connect
+   ([lookup] is typically [Symbol_directory.name mirror]). An id the mirror
+   doesn't know renders as ["#<id>"] rather than masquerading as a name. *)
+let render_symbol ~lookup id =
+  match (lookup id : Symbol.t option) with
+  | Some symbol -> Symbol.to_string symbol
+  | None -> [%string "#%{id#Symbol_id}"]
+;;
+
+(* Mirrors {!Fill.to_string} (which prints the raw id), with the symbol
+   resolved to a name. *)
+let format_fill ~lookup (fill : Fill.t) =
+  sprintf
+    "fill_id=%d %s %s x%d aggressor=%s|%s(%s) %s resting=%s|%s(%s)"
+    fill.fill_id
+    (render_symbol ~lookup fill.symbol)
+    (Price.to_string_dollar fill.price)
+    (Size.to_int fill.size)
+    (Client_order_id.to_string fill.aggressor_client_order_id)
+    (Order_id.to_string fill.aggressor_order_id)
+    (Participant.to_string fill.aggressor_participant)
+    (Side.to_string fill.aggressor_side)
+    (Client_order_id.to_string fill.resting_client_order_id)
+    (Order_id.to_string fill.resting_order_id)
+    (Participant.to_string fill.resting_participant)
+;;
+
+(* Mirrors {!Fill.to_participant_view}, resolving the symbol. *)
+let fill_participant_view ~lookup (fill : Fill.t) participant =
+  let resting_side = Side.flip fill.aggressor_side in
+  let resting_verb =
+    match resting_side with Buy -> "bought" | Sell -> "sold"
+  in
+  if Participant.equal fill.resting_participant participant
+  then
+    Some
+      (sprintf
+         "You %s %d %s at %s"
+         resting_verb
+         (Size.to_int fill.size)
+         (render_symbol ~lookup fill.symbol)
+         (Price.to_string_dollar fill.price))
+  else None
+;;
+
+(* Mirrors {!Book.to_string}, resolving the header symbol. *)
+let format_book ~lookup ({ symbol; bids; asks; bbo } : Book.t) =
+  let format_side label levels =
+    match levels with
+    | [] -> [%string "  %{label}: (empty)"]
+    | _ ->
+      let lines =
+        List.map levels ~f:(fun level -> [%string "    %{level#Level}"])
+        |> String.concat ~sep:"\n"
+      in
+      [%string "  %{label}:\n%{lines}"]
+  in
+  let symbol = render_symbol ~lookup symbol in
+  String.concat
+    ~sep:"\n"
+    [ [%string "=== %{symbol} ==="]
+    ; format_side "BIDS" bids
+    ; format_side "ASKS" asks
+    ; [%string "  BBO: %{bbo#Bbo}"]
+    ]
+;;
+
+let format_event ~lookup = function
   | Exchange_event.Order_accept { order_id; participant = _; request } ->
     sprintf
       "ACCEPTED id=%s %s %s %d@%s %s"
       (Order_id.to_string order_id)
-      (Symbol_id.to_string request.symbol)
+      (render_symbol ~lookup request.symbol)
       (Side.to_string request.side)
       (Size.to_int request.size)
       (Price.to_string_dollar request.price)
       (Time_in_force.to_string request.time_in_force)
-  | Fill fill -> [%string "FILL %{fill#Fill}"]
+  | Fill fill -> [%string "FILL %{format_fill ~lookup fill}"]
   | Order_cancel
       { order_id
       ; client_order_id = _
@@ -104,7 +173,7 @@ let format_event = function
     sprintf
       "CANCELLED id=%s %s remaining=%d reason=%s"
       (Order_id.to_string order_id)
-      (Symbol_id.to_string symbol)
+      (render_symbol ~lookup symbol)
       (Size.to_int remaining_size)
       (Cancel_reason.to_string reason)
   | Cancel_reject { participant; client_order_id; reason } ->
@@ -116,7 +185,7 @@ let format_event = function
   | Order_reject { participant = _; request; reason } ->
     sprintf
       "REJECTED %s %s %d@%s reason=%s"
-      (Symbol_id.to_string request.symbol)
+      (render_symbol ~lookup request.symbol)
       (Side.to_string request.side)
       (Size.to_int request.size)
       (Price.to_string_dollar request.price)
@@ -124,12 +193,14 @@ let format_event = function
   | Best_bid_offer_update { symbol; bbo } ->
     let bid = Level.opt_to_string bbo.bid in
     let ask = Level.opt_to_string bbo.ask in
-    [%string "BBO %{symbol#Symbol_id} bid=%{bid} ask=%{ask}"]
+    let symbol = render_symbol ~lookup symbol in
+    [%string "BBO %{symbol} bid=%{bid} ask=%{ask}"]
   | Trade_report { symbol; price; size } ->
     let size = Size.to_int size in
-    [%string "TRADE %{symbol#Symbol_id} %{price#Price} x%{size#Int}"]
+    let symbol = render_symbol ~lookup symbol in
+    [%string "TRADE %{symbol} %{price#Price} x%{size#Int}"]
 ;;
 
-let format_events events =
-  List.map events ~f:format_event |> String.concat ~sep:"\n"
+let format_events ~lookup events =
+  List.map events ~f:(format_event ~lookup) |> String.concat ~sep:"\n"
 ;;

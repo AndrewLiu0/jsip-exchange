@@ -81,8 +81,11 @@ module Filter = struct
     | Substring s -> String.Caseless.is_substring line ~substring:s
   ;;
 
-  let matches t event =
-    let line = Protocol.format_event event in
+  (* Substring predicates match against the RENDERED line, so the lookup must
+     reach filtering, not just display: users filter by the names they see
+     (e.g. "AAPL"), which only exist post-resolution. *)
+  let matches ~lookup t event =
+    let line = Protocol.format_event ~lookup event in
     List.for_all t ~f:(predicate_matches event line)
   ;;
 end
@@ -90,12 +93,15 @@ end
 type t =
   { events_rev : Exchange_event.t list
   ; filter : Filter.t
+  ; lookup : Symbol_id.t -> Symbol.t option
   ; (* Ordered by first appearance — newest symbol last. Reorganising on
        every BBO would be visually noisy. *)
     bbos_rev : (Symbol_id.t * Bbo.t) list
   }
 
-let create () = { events_rev = []; filter = Filter.all; bbos_rev = [] }
+let create ~lookup =
+  { events_rev = []; filter = Filter.all; lookup; bbos_rev = [] }
+;;
 
 let update_bbos bbos_rev symbol bbo =
   let found, updated =
@@ -123,12 +129,14 @@ let set_filter t filter = { t with filter }
 let filter t = t.filter
 
 let visible_events t =
-  List.rev_filter t.events_rev ~f:(Filter.matches t.filter)
+  List.rev_filter t.events_rev ~f:(Filter.matches ~lookup:t.lookup t.filter)
 ;;
 
-let visible_lines t = List.map (visible_events t) ~f:Protocol.format_event
+let visible_lines t =
+  List.map (visible_events t) ~f:(Protocol.format_event ~lookup:t.lookup)
+;;
 
 let visible_styled_lines t =
   List.map (visible_events t) ~f:(fun event ->
-    Color.of_event event, Protocol.format_event event)
+    Color.of_event event, Protocol.format_event ~lookup:t.lookup event)
 ;;

@@ -12,11 +12,14 @@ open Bonsai_term
 
 (** The bonsai_term app. Pass to [Bonsai_term.start_with_exit]. [events] is
     the pipe of exchange events the app should drain into its controller
-    (typically the reader returned by [Rpc_protocol.audit_log_rpc]). The
-    drain starts when the Bonsai graph activates and ends when [events] is
-    closed. *)
+    (typically the reader returned by [Rpc_protocol.audit_log_rpc]); events
+    carry symbol ids, and [lookup] (the mirror of the exchange's symbol
+    directory) resolves them to names for display and substring filtering.
+    The drain starts when the Bonsai graph activates and ends when [events]
+    is closed. *)
 val app
-  :  events:Exchange_event.t Pipe.Reader.t
+  :  lookup:(Symbol_id.t -> Symbol.t option)
+  -> events:Exchange_event.t Pipe.Reader.t
   -> exit:(unit -> unit Effect.t)
   -> dimensions:Dimensions.t Bonsai.t
   -> local_ Bonsai.graph

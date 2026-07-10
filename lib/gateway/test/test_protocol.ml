@@ -3,6 +3,20 @@ open Jsip_types
 open Jsip_order_book
 open Jsip_gateway
 
+(* A directory mirror matching the harness's default universe (AAPL=0,
+   TSLA=1, GOOG=2): [Exchange_command.parse] resolves names through it and
+   the formatters resolve ids back. *)
+let directory =
+  Symbol_directory.of_symbols
+    [ Symbol.of_string "AAPL"
+    ; Symbol.of_string "TSLA"
+    ; Symbol.of_string "GOOG"
+    ]
+;;
+
+let id_lookup = Symbol_directory.id directory
+let name_lookup = Symbol_directory.name directory
+
 let print_parse line =
   match Protocol.parse_command line with
   | Error msg -> print_endline [%string "ERROR: %{msg}"]
@@ -127,7 +141,10 @@ let%expect_test "parse error: unknown time-in-force" =
 
 let%expect_test "SUBMIT via Exchange_command carries the client order id" =
   let req =
-    match Exchange_command.parse "BUY 7 0 100 150.00" |> ok_exn with
+    match
+      Exchange_command.parse ~lookup:id_lookup "BUY 7 AAPL 100 150.00"
+      |> ok_exn
+    with
     | Submit r -> r
     | Book _ | Subscribe _ -> failwith "Expected order"
   in
@@ -140,7 +157,7 @@ let%expect_test "SUBMIT via Exchange_command carries the client order id" =
 
 let%expect_test "BOOK with a symbol argument" =
   let symbol =
-    match Exchange_command.parse "BOOK 0" |> ok_exn with
+    match Exchange_command.parse ~lookup:id_lookup "BOOK AAPL" |> ok_exn with
     | Book s -> s
     | Submit _ | Subscribe _ -> failwith "Expected order"
   in
@@ -150,7 +167,9 @@ let%expect_test "BOOK with a symbol argument" =
 
 let%expect_test "SUBSCRIBE with case-insensitive input" =
   let symbol =
-    match Exchange_command.parse "subsCribe 0" |> ok_exn with
+    match
+      Exchange_command.parse ~lookup:id_lookup "subsCribe aapl" |> ok_exn
+    with
     | Subscribe s -> s
     | Submit _ | Book _ -> failwith "Expected order"
   in
@@ -231,16 +250,17 @@ let%expect_test "format_event: all event types" =
         }
     ]
   in
-  List.iter events ~f:(fun e -> print_endline (Protocol.format_event e));
+  List.iter events ~f:(fun e ->
+    print_endline (Protocol.format_event ~lookup:name_lookup e));
   [%expect
     {|
-    ACCEPTED id=1 0 BUY 100@$150.00 DAY
-    FILL fill_id=1 0 $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
-    CANCELLED id=3 1 remaining=50 reason=IOC_REMAINDER
-    REJECTED 2 SELL 10@$280.00 reason=unknown symbol
-    BBO 0 bid=$149.90 x200 ask=$150.10 x100
-    BBO 0 bid=- ask=-
-    TRADE 0 $150.00 x100
+    ACCEPTED id=1 AAPL BUY 100@$150.00 DAY
+    FILL fill_id=1 AAPL $150.00 x100 aggressor=1|2(Alice) BUY resting=2|1(Bob)
+    CANCELLED id=3 TSLA remaining=50 reason=IOC_REMAINDER
+    REJECTED GOOG SELL 10@$280.00 reason=unknown symbol
+    BBO AAPL bid=$149.90 x200 ask=$150.10 x100
+    BBO AAPL bid=- ask=-
+    TRADE AAPL $150.00 x100
     |}]
 ;;
 
@@ -266,14 +286,14 @@ let%expect_test "round-trip: parse a command, submit, format result" =
       ~participant:Harness.alice
       request
   in
-  print_endline (Protocol.format_events events);
+  print_endline (Protocol.format_events ~lookup:name_lookup events);
   [%expect
     {|
-    ACCEPTED id=1 0 SELL 100@$150.00 DAY
-    BBO 0 bid=- ask=$150.00 x100
-    ACCEPTED id=2 0 BUY 100@$150.00 DAY
-    FILL fill_id=1 0 $150.00 x100 aggressor=2|2(Alice) BUY resting=101|1(Bob)
-    TRADE 0 $150.00 x100
-    BBO 0 bid=- ask=-
+    ACCEPTED id=1 AAPL SELL 100@$150.00 DAY
+    BBO AAPL bid=- ask=$150.00 x100
+    ACCEPTED id=2 AAPL BUY 100@$150.00 DAY
+    FILL fill_id=1 AAPL $150.00 x100 aggressor=2|2(Alice) BUY resting=101|1(Bob)
+    TRADE AAPL $150.00 x100
+    BBO AAPL bid=- ask=-
     |}]
 ;;

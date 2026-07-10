@@ -38,11 +38,12 @@ module Display : sig
   type t =
     { title : string
     ; counter : string
-    ; bbo_panel : (Symbol_id.t * Bbo.t) list
-    (** Snapshot of the latest BBO per symbol, in first-appearance order.
-        Always visible in the chrome — independent of the event-list filters
-        — so the user can keep an eye on the live market while drilling into
-        specific event categories. *)
+    ; bbo_panel : (string * Bbo.t) list
+    (** Snapshot of the latest BBO per symbol — the symbol already resolved
+        to display text — in first-appearance order. Always visible in the
+        chrome — independent of the event-list filters — so the user can keep
+        an eye on the live market while drilling into specific event
+        categories. *)
     ; category_chips : Chip.t list
     ; substring_field : substring_field
     ; visible_events : (Event_log.Color.t * string) list
@@ -54,7 +55,9 @@ end
 
 type t
 
-val create : unit -> t
+(** [lookup] resolves wire symbol ids to names; it flows into the event log
+    for rendering and substring filtering. *)
+val create : lookup:(Symbol_id.t -> Symbol.t option) -> t
 
 (** Deliver a new exchange event. The controller appends it to the log; the
     next call to [display] will include it if the current filter admits. *)

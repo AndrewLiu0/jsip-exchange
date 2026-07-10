@@ -280,7 +280,7 @@ let bench_submit_sweep ~n =
 ;;
 
 (* ---------------------------------------------------------------- *)
-(* Symbol-lookup benchmarks (Part 4, Ex 2) *)
+(* Symbol-lookup benchmarks (Part 4, Ex 2, re-measured for Ex 4) *)
 (* ---------------------------------------------------------------- *)
 
 (* Symbol counts get their own sweep: [sizes] above counts resting orders,
@@ -290,7 +290,14 @@ let symbol_counts = [ 10; 100; 1_000; 10_000 ]
 (** Engine trading [k] symbols, all books empty: [Matching_engine.book] is
     then a pure symbol-resolution measurement, not buried under matching
     work. The benchmarks in [tests] are all single-symbol, so they never
-    stress this lookup. *)
+    stress this lookup.
+
+    In Ex 2 this measured hash-then-index: the request carried a string
+    symbol and the engine hashed it back to an id (baseline in
+    [symbol_lookup_after.txt] at the repo root). Since Ex 4 the wire carries
+    the id itself, so the same [Matching_engine.book] call is a bounds check
+    plus an array read — compare against the baseline to see what pushing the
+    id across the wire bought ([symbol_lookup_by_id.txt]). *)
 let bench_symbol_lookup ~k =
   let engine = Matching_engine.create ~num_symbols:k in
   (* Probes prebuilt outside the thunks. The miss is one past the last valid

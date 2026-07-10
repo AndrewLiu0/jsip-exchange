@@ -161,11 +161,13 @@ module Show : sig
 end
 
 (** Print a list of events. By default prints all events; pass [~show] to
-    filter. *)
-val print_events : ?show:Show.t -> Exchange_event.t list -> unit
+    filter. Symbol ids resolve to names through the harness's directory — the
+    harness is a consumer, so its output speaks names like the client's
+    would. *)
+val print_events : ?show:Show.t -> t -> Exchange_event.t list -> unit
 
 (** Print a single event. *)
-val print_event : Exchange_event.t -> unit
+val print_event : t -> Exchange_event.t -> unit
 
 (** Print the current order book for a symbol. Shows bids, asks, and the BBO. *)
 val print_book : t -> Symbol_id.t -> unit

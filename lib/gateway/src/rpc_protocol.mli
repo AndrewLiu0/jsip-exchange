@@ -36,6 +36,15 @@ val book_query_rpc : (Symbol_id.t, Book.t option) Rpc.Rpc.t
 
 val login_rpc : (string, Participant.t Or_error.t) Rpc.Rpc.t
 
+(** The full [(name, id)] mapping for every symbol this exchange trades, in
+    id order. The symbol set is fixed for the server's lifetime, so clients
+    fetch this once at connect and mirror it locally (via
+    {!Symbol_directory.of_alist_exn}) to resolve names typed by humans into
+    wire ids at parse time, and ids in received events back into names at
+    render time. This is the only RPC that carries symbol {e names}; every
+    other message speaks {!Symbol_id.t}. *)
+val symbol_directory_rpc : (unit, (Symbol.t * Symbol_id.t) list) Rpc.Rpc.t
+
 (** Subscribe to market data for one or more symbol ids. The server pushes
     BBO updates and trade reports as they happen via a single pipe. The query
     is the list of ids to subscribe to; using one RPC for the whole list

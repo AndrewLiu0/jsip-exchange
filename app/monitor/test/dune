@@ -5,6 +5,7 @@
   jsip_types
   jsip_test_harness
   jsip_monitor
+  jsip_gateway
   bonsai_term
   notty-community
   core)

@@ -103,9 +103,13 @@ let push_to_session t participant event =
   match session with
   | Some session -> Session.push session event
   | None ->
-    print_endline
-      [%string
-        "[for %{participant#Participant}] %{Protocol.format_event event}"]
+    (* The server never renders symbols on any real path; this stdout
+       fallback is a debugging aid, so it borrows the directory to stay
+       readable. *)
+    let formatted =
+      Protocol.format_event ~lookup:(Symbol_directory.name t.directory) event
+    in
+    print_endline [%string "[for %{participant#Participant}] %{formatted}"]
 ;;
 
 let dispatch_event t (event : Exchange_event.t) =

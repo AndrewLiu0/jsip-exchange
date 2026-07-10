@@ -65,12 +65,19 @@ module Filter : sig
   val combine : t -> t -> t
 
   (** Whether the filter would keep [event]. *)
-  val matches : t -> Exchange_event.t -> bool
+  val matches
+    :  lookup:(Symbol_id.t -> Symbol.t option)
+    -> t
+    -> Exchange_event.t
+    -> bool
 end
 
 type t
 
-val create : unit -> t
+(** [lookup] resolves wire symbol ids to names for rendering AND substring
+    filtering (users filter by the names they see). Typically
+    [Symbol_directory.name mirror] over the directory fetched at connect. *)
+val create : lookup:(Symbol_id.t -> Symbol.t option) -> t
 
 (** Append an event to the log. Also refreshes [current_bbos] when [event] is
     a [Best_bid_offer_update]. *)

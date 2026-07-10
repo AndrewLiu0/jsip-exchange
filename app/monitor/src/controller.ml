@@ -27,7 +27,7 @@ module Display = struct
   type t =
     { title : string
     ; counter : string
-    ; bbo_panel : (Symbol_id.t * Bbo.t) list
+    ; bbo_panel : (string * Bbo.t) list
     ; category_chips : Chip.t list
     ; substring_field : substring_field
     ; visible_events : (Event_log.Color.t * string) list
@@ -39,14 +39,16 @@ end
 
 type t =
   { log : Event_log.t
+  ; lookup : Symbol_id.t -> Symbol.t option
   ; enabled_categories : Event_log.Category.t list
   ; committed_substring : string
   ; mode : Mode.t
   ; should_exit : bool
   }
 
-let create () =
-  { log = Event_log.create ()
+let create ~lookup =
+  { log = Event_log.create ~lookup
+  ; lookup
   ; enabled_categories = Event_log.Category.all
   ; committed_substring = ""
   ; mode = Browsing
@@ -176,7 +178,11 @@ let display t : Display.t =
   in
   { title = "JSIP Exchange Monitor"
   ; counter = [%string "%{visible_count#Int} of %{total#Int} events"]
-  ; bbo_panel = Event_log.current_bbos t.log
+  ; bbo_panel =
+      (* Resolved here so [Display.t] is fully render-ready — the bonsai_term
+         layer never needs the directory. *)
+      List.map (Event_log.current_bbos t.log) ~f:(fun (id, bbo) ->
+        Jsip_gateway.Protocol.render_symbol ~lookup:t.lookup id, bbo)
   ; category_chips =
       [ cat_chip '1' Order_lifecycle
       ; cat_chip '2' Trade

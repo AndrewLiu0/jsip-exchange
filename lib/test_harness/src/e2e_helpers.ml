@@ -34,12 +34,19 @@ let connect_as ~port (participant : Participant.t) =
       (Participant.to_string participant)
   in
   let (_ : Participant.t) = Or_error.ok_exn login_result in
+  (* Mirror the directory exactly as a real client does at connect, so the
+     printed session feed speaks names. *)
+  let%bind directory_alist =
+    Rpc.Rpc.dispatch_exn Rpc_protocol.symbol_directory_rpc conn ()
+  in
+  let directory = Symbol_directory.of_alist_exn directory_alist in
+  let lookup = Symbol_directory.name directory in
   let%bind session_feed, _metadata =
     Rpc.Pipe_rpc.dispatch_exn Rpc_protocol.session_feed_rpc conn ()
   in
   don't_wait_for
     (Pipe.iter_without_pushback session_feed ~f:(fun event ->
-       let e = Protocol.format_event event in
+       let e = Protocol.format_event ~lookup event in
        print_endline [%string "[for %{participant#Participant}] %{e}"]));
   return { conn }
 ;;

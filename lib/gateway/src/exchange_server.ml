@@ -229,6 +229,14 @@ let start
             ignore state;
             Matching_engine.book engine symbol
             |> Option.map ~f:Order_book.snapshot)
+        ; (* The one RPC that speaks names: consumers mirror this at connect
+             and everything after that is ids. Serving it is the server's
+             only name-related job — it never renders one itself. *)
+          Rpc.Rpc.implement'
+            Rpc_protocol.symbol_directory_rpc
+            (fun state () ->
+               ignore state;
+               Symbol_directory.to_alist directory)
         ; Rpc.Pipe_rpc.implement
             Rpc_protocol.market_data_rpc
             (fun state symbols ->

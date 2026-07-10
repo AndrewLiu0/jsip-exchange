@@ -24,8 +24,16 @@ let run_client ~host ~port ~participant_name =
      print_endline [%string "Login failed : %{Error.to_string_hum err} "]
    | Ok _participant -> ());
   let participant = Or_error.ok_exn login_result in
-  (* let %bind session_feed_result = Rpc.Pipe_rpc.dispatch
-     Rpc_protocol.session_feed_rpc conn in *)
+  (* Fetch the symbol directory once at connect and mirror it locally: the
+     wire speaks ids from here on, and this mirror is how names typed by the
+     user become ids (at parse) and ids in events become names (at render).
+     The exchange's symbol set is fixed for the server's lifetime, so a
+     one-shot fetch cannot go stale. *)
+  let%bind directory_alist =
+    Rpc.Rpc.dispatch_exn Rpc_protocol.symbol_directory_rpc conn ()
+  in
+  let directory = Symbol_directory.of_alist_exn directory_alist in
+  let lookup = Symbol_directory.name directory in
   let tif_to_string =
     List.map ~f:Time_in_force.to_string Time_in_force.all
   in
@@ -34,9 +42,9 @@ let run_client ~host ~port ~participant_name =
     [%string
       {|
 Connected to exchange at %{host}:%{port#Int} as %{participant#Participant}
-Commands: BUY|SELL <client_order_id> <symbol-id> <size> <price> %{enumerate_tif}
-          BOOK <symbol-id>
-          SUBSCRIBE <symbol-id>  (stream market data)
+Commands: BUY|SELL <client_order_id> <symbol> <size> <price> %{enumerate_tif}
+          BOOK <symbol>
+          SUBSCRIBE <symbol>  (stream market data)
 
 Order acknowledgements, fills, and cancellations are temporarily printed
 by the server process; the SUBSCRIBE command attaches you to a per-symbol
@@ -56,11 +64,11 @@ market-data feed.|}];
             match event with
             | Fill fill ->
               Option.value
-                (Fill.to_participant_view fill participant)
+                (Protocol.fill_participant_view ~lookup fill participant)
                 ~default:""
               |> print_endline
             (* TODO: handle other exchange events, unsure of behavior *)
-            | _ -> Protocol.format_event event |> print_endline)));
+            | _ -> Protocol.format_event ~lookup event |> print_endline)));
     match%bind Reader.read_line (Lazy.force Reader.stdin) with
     | `Eof ->
       print_endline "\nDisconnected.";
@@ -70,7 +78,9 @@ market-data feed.|}];
       if String.is_empty line
       then loop ()
       else (
-        let result = Exchange_command.parse line in
+        let result =
+          Exchange_command.parse ~lookup:(Symbol_directory.id directory) line
+        in
         match result with
         | Ok (Submit req) ->
           let%bind.Deferred.Or_error () =
@@ -83,9 +93,10 @@ market-data feed.|}];
           in
           (match result with
            | None ->
-             print_endline
-               [%string "No book available for %{symbol#Symbol_id}"]
-           | Some result -> print_endline (Book.to_string result));
+             let symbol = Protocol.render_symbol ~lookup symbol in
+             print_endline [%string "No book available for %{symbol}"]
+           | Some result ->
+             print_endline (Protocol.format_book ~lookup result));
           loop ()
         | Ok (Subscribe symbol) ->
           let%bind result =
@@ -100,17 +111,18 @@ market-data feed.|}];
                [%string "ERROR subscribing: %{Error.to_string_hum err}"];
              loop ()
            | Ok (Ok (reader, _id)) ->
+             let symbol = Protocol.render_symbol ~lookup symbol in
              print_endline
                [%string
                  {|
-  Subscribed to %{symbol#Symbol_id} market data. Updates will appear below.
+  Subscribed to %{symbol} market data. Updates will appear below.
   Continue entering commands as normal.|}];
              (* Read market data in the background; the command loop
                 continues running concurrently. *)
              don't_wait_for
                (Pipe.iter_without_pushback reader ~f:(fun event ->
                   print_endline
-                    [%string "[MD] %{Protocol.format_event event}"]));
+                    [%string "[MD] %{Protocol.format_event ~lookup event}"]));
              loop ())
         | Error msg ->
           print_s [%sexp (msg : Error.t)];

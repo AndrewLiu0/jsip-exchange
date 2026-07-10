@@ -114,16 +114,24 @@ module Show = struct
   let no_market_data event = not (Exchange_event.is_market_data event)
 end
 
-let print_events ?(show = Show.all) events =
+(* Expect output speaks names: the harness is a consumer, so it resolves ids
+   through its own directory exactly as the client and monitor resolve
+   through their mirrors. *)
+let lookup t = Symbol_directory.name t.directory
+
+let print_events ?(show = Show.all) t events =
   List.iter events ~f:(fun event ->
-    if show event then print_endline (Protocol.format_event event))
+    if show event
+    then print_endline (Protocol.format_event ~lookup:(lookup t) event))
 ;;
 
-let print_event event = print_endline (Protocol.format_event event)
+let print_event t event =
+  print_endline (Protocol.format_event ~lookup:(lookup t) event)
+;;
 
 let submit ?(participant = alice) t request =
   let events = Matching_engine.submit t.engine ~participant request in
-  print_events events;
+  print_events t events;
   events
 ;;
 
@@ -201,14 +209,20 @@ let submit_quiet_ ?participant t request =
 
 let print_book t symbol =
   match Matching_engine.book t.engine symbol with
-  | None -> print_endline [%string "unknown symbol %{symbol#Symbol_id}"]
-  | Some book -> Order_book.snapshot book |> Book.to_string |> print_endline
+  | None ->
+    let symbol = Protocol.render_symbol ~lookup:(lookup t) symbol in
+    print_endline [%string "unknown symbol %{symbol}"]
+  | Some book ->
+    Order_book.snapshot book
+    |> Protocol.format_book ~lookup:(lookup t)
+    |> print_endline
 ;;
 
 let print_bbo t symbol =
+  let symbol_text = Protocol.render_symbol ~lookup:(lookup t) symbol in
   match Matching_engine.book t.engine symbol with
-  | None -> print_endline [%string "BBO %{symbol#Symbol_id}: unknown symbol"]
+  | None -> print_endline [%string "BBO %{symbol_text}: unknown symbol"]
   | Some book ->
     let bbo = Order_book.best_bid_offer book |> Bbo.to_string in
-    print_endline [%string "BBO %{symbol#Symbol_id}: %{bbo}"]
+    print_endline [%string "BBO %{symbol_text}: %{bbo}"]
 ;;

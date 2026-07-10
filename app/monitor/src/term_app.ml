@@ -115,12 +115,12 @@ let bbo_value_attr = Attr.fg Attr.Color.Expert.lightcyan
 let render_bbo_row (symbol, bbo) =
   let bbo_str = Bbo.to_string bbo in
   View.hcat
-    [ View.text ~attrs:[ title_attr ] [%string "%{symbol#Symbol_id}: "]
+    [ View.text ~attrs:[ title_attr ] [%string "%{symbol}: "]
     ; View.text ~attrs:[ bbo_value_attr ] bbo_str
     ]
 ;;
 
-let render_bbo_panel (bbos : (Symbol_id.t * Bbo.t) list) =
+let render_bbo_panel (bbos : (string * Bbo.t) list) =
   let label =
     View.text ~attrs:[ dim_grey ] (String.pad_right "BBO:" ~len:12)
   in
@@ -289,10 +289,10 @@ let drain_events_on_activate events inject =
            (inject (Action.Feed_event event)))))
 ;;
 
-let app ~events ~exit ~dimensions (local_ graph) =
+let app ~lookup ~events ~exit ~dimensions (local_ graph) =
   let controller, inject =
     Bonsai.state_machine
-      ~default_model:(Controller.create ())
+      ~default_model:(Controller.create ~lookup)
       ~apply_action:(fun _ctx model action ->
         match (action : Action.t) with
         | Feed_event event -> Controller.feed_event model event
