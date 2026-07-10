@@ -6,7 +6,7 @@ type t =
   { symbol : Symbol_id.t
   ; mutable bids : Order.t Order_queue.t Price.Map.t
   ; mutable asks : Order.t Order_queue.t Price.Map.t
-  ; mutable id_to_order : Order.t Order_id.Map.t (* Can make Hashtable? *)
+  ; id_to_order : Order.t Order_id.Table.t
   }
 [@@deriving sexp_of]
 
@@ -14,7 +14,7 @@ let create symbol =
   { symbol
   ; bids = Price.Map.empty
   ; asks = Price.Map.empty
-  ; id_to_order = Order_id.Map.empty
+  ; id_to_order = Order_id.Table.create ()
   }
 ;;
 
@@ -32,7 +32,7 @@ let set_side_map t side orders =
 
 (* Unused but needed for interface *)
 let orders_on_side t side =
-  List.filter (Map.data t.id_to_order) ~f:(fun order ->
+  List.filter (Hashtbl.data t.id_to_order) ~f:(fun order ->
     Side.equal (Order.side order) side)
 ;;
 
@@ -41,7 +41,7 @@ let add t order =
   let side = Order.side order in
   let side_map = side_map t side in
   let order_id = Order.order_id order in
-  t.id_to_order <- Map.set t.id_to_order ~key:order_id ~data:order;
+  Hashtbl.set t.id_to_order ~key:order_id ~data:order;
   let find_result = Map.find side_map price in
   let queue =
     match find_result with
@@ -57,7 +57,7 @@ let add t order =
 
 let get_queue t order_id =
   let open Option.Let_syntax in
-  let%bind order = Map.find t.id_to_order order_id in
+  let%bind order = Hashtbl.find t.id_to_order order_id in
   let side_map = side_map t (Order.side order) in
   Map.find side_map (Order.price order)
 ;;
@@ -65,10 +65,9 @@ let get_queue t order_id =
 let remove' t order_id : Order.t option =
   let open Option.Let_syntax in
   let%bind queue = get_queue t order_id in
-  let%bind order = Map.find t.id_to_order order_id in
+  let%bind order = Hashtbl.find t.id_to_order order_id in
   let result = Order_queue.lookup_and_remove queue order_id in
-  let new_id_to_order = Map.remove t.id_to_order order_id in
-  t.id_to_order <- new_id_to_order;
+  Hashtbl.remove t.id_to_order order_id;
   if Order_queue.length queue = 0
   then (
     let side = Order.side order in

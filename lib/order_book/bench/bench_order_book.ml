@@ -201,11 +201,20 @@ let bench_snapshot ~n =
 let bench_submit_ioc_cross ~n =
   (* Measure submitting an IOC order that crosses the best ask. This is the
      most common hot path: order in, fill out. We re-seed a resting order
-     after each iteration to keep the book state consistent. *)
+     after each iteration to keep the book state consistent.
+
+     Client order ids are never reused within an engine's lifetime (see
+     [Matching_engine.submit]), so each iteration must submit under a fresh
+     id — reusing one measures the duplicate-reject path instead. *)
   let min_price = 10_000 in
   let max_price = 20_000 in
   let engine = engine_with_n_asks ~min_price n in
   let next_price = ref (min_price + 1) in
+  let next_client_id = ref n in
+  let fresh_client_id () =
+    incr next_client_id;
+    Client_order_id.For_testing.of_int !next_client_id
+  in
   Bench.Test.create
     ~name:[%string "submit_ioc_cross (n=%{n#Int})"]
     (fun () ->
@@ -213,7 +222,7 @@ let bench_submit_ioc_cross ~n =
          Matching_engine.submit
            engine
            ~participant:alice
-           { client_order_id = Client_order_id.For_testing.of_int 1
+           { client_order_id = fresh_client_id ()
            ; symbol = aapl
            ; side = Buy
            ; price = Price.of_int_cents max_price
@@ -227,7 +236,7 @@ let bench_submit_ioc_cross ~n =
          (Matching_engine.submit
             engine
             ~participant:bob
-            { client_order_id = Client_order_id.For_testing.of_int 1
+            { client_order_id = fresh_client_id ()
             ; symbol = aapl
             ; side = Sell
             ; price = Price.of_int_cents !next_price
@@ -240,14 +249,18 @@ let bench_submit_ioc_cross ~n =
 ;;
 
 let bench_submit_ioc_no_match ~n =
+  (* A non-marketable IOC is accepted then cancelled, never resting, so the
+     book is unchanged across iterations — only the id must be fresh. *)
   let min_price = 10_000 in
   let engine = engine_with_n_asks ~min_price n in
+  let next_client_id = ref n in
   Bench.Test.create ~name:[%string "submit_ioc_miss (n=%{n#Int})"] (fun () ->
+    incr next_client_id;
     ignore
       (Matching_engine.submit
          engine
          ~participant:alice
-         { client_order_id = Client_order_id.For_testing.of_int 1
+         { client_order_id = Client_order_id.For_testing.of_int !next_client_id
          ; symbol = aapl
          ; side = Buy
          ; price = Price.of_int_cents (min_price - 1)
@@ -277,6 +290,67 @@ let bench_submit_sweep ~n =
        : Exchange_event.t list);
     (* Re-seed entire book *)
     engine := engine_with_n_asks n)
+;;
+
+(* ---------------------------------------------------------------- *)
+(* Deep-level benchmarks: all resting orders at ONE price *)
+(* ---------------------------------------------------------------- *)
+
+(* The distinct-price fixtures above put one order per price level, so any
+   per-level fold looks O(1) no matter how big the book. These benchmarks
+   pile [n] orders onto a single level — the shape the book-fill scenario
+   produces — where [queue_to_level]'s fold visits all [n] orders per call. *)
+
+let deep_sizes = [ 100; 1_000; 10_000 ]
+let deep_level_price = 15_000
+
+(** Engine with [n] resting sells all at [deep_level_price]: one giant ask
+    level, empty bid side. Client ids 1..n are used (by [bob]). *)
+let engine_with_n_same_price_asks n =
+  let engine = Matching_engine.create ~num_symbols:1 in
+  for i = 1 to n do
+    ignore
+      (Matching_engine.submit
+         engine
+         ~participant:bob
+         { client_order_id = Client_order_id.For_testing.of_int i
+         ; symbol = aapl
+         ; side = Sell
+         ; price = Price.of_int_cents deep_level_price
+         ; size = Size.of_int 100
+         ; time_in_force = Day
+         }
+       : Exchange_event.t list)
+  done;
+  engine
+;;
+
+let bench_best_bid_offer_deep ~n =
+  let book = book_with_n_same_price_asks n in
+  Bench.Test.create
+    ~name:[%string "best_bid_offer_deep (n=%{n#Int})"]
+    (fun () -> ignore (Order_book.best_bid_offer book : Bbo.t))
+;;
+
+let bench_submit_rest_deep ~n =
+  (* The book-fill hot path: a non-marketable Day order submitted while one
+     huge level rests on the opposite side. [Matching_engine.submit]
+     computes the BBO before and after the order is added, folding that
+     whole level both times, so this should scale with [n] until the book
+     is fixed. *)
+  let engine = engine_with_n_same_price_asks n in
+  let next_client_id = ref n in
+  Bench.Test.create
+    ~name:[%string "submit_rest_deep (n=%{n#Int})"]
+    (fun () ->
+       (* TODO(human): implement the thunk body. It must (a) submit a
+          non-marketable Day order through [Matching_engine.submit], and
+          (b) leave the book the same size it started at by the time the
+          thunk returns, so every iteration measures the same book shape.
+          Client order ids can never be reused within an engine. *)
+       ignore (engine : Matching_engine.t);
+       ignore (next_client_id : int ref);
+       failwith "TODO: implement the submit_rest_deep thunk")
 ;;
 
 (* ---------------------------------------------------------------- *)
@@ -388,5 +462,13 @@ let () =
          , Bench.make_command
              (List.concat_map symbol_counts ~f:(fun k ->
                 bench_symbol_lookup ~k)) )
+       ; ( "deep-level"
+         , Bench.make_command
+             (List.concat
+                [ List.map deep_sizes ~f:(fun n ->
+                    bench_best_bid_offer_deep ~n)
+                ; List.map deep_sizes ~f:(fun n ->
+                    bench_submit_rest_deep ~n)
+                ]) )
        ])
 ;;
