@@ -260,7 +260,8 @@ let bench_submit_ioc_no_match ~n =
       (Matching_engine.submit
          engine
          ~participant:alice
-         { client_order_id = Client_order_id.For_testing.of_int !next_client_id
+         { client_order_id =
+             Client_order_id.For_testing.of_int !next_client_id
          ; symbol = aapl
          ; side = Buy
          ; price = Price.of_int_cents (min_price - 1)
@@ -334,23 +335,35 @@ let bench_best_bid_offer_deep ~n =
 
 let bench_submit_rest_deep ~n =
   (* The book-fill hot path: a non-marketable Day order submitted while one
-     huge level rests on the opposite side. [Matching_engine.submit]
-     computes the BBO before and after the order is added, folding that
-     whole level both times, so this should scale with [n] until the book
-     is fixed. *)
+     huge level rests on the opposite side. [Matching_engine.submit] computes
+     the BBO before and after the order is added, folding that whole level
+     both times, so this should scale with [n] until the book is fixed. *)
   let engine = engine_with_n_same_price_asks n in
   let next_client_id = ref n in
   Bench.Test.create
     ~name:[%string "submit_rest_deep (n=%{n#Int})"]
     (fun () ->
-       (* TODO(human): implement the thunk body. It must (a) submit a
-          non-marketable Day order through [Matching_engine.submit], and
-          (b) leave the book the same size it started at by the time the
-          thunk returns, so every iteration measures the same book shape.
-          Client order ids can never be reused within an engine. *)
-       ignore (engine : Matching_engine.t);
-       ignore (next_client_id : int ref);
-       failwith "TODO: implement the submit_rest_deep thunk")
+       (* Submit-then-cancel keeps the book at [n] resting orders across
+          iterations; the cancel is part of the measured work. *)
+       incr next_client_id;
+       let client_order_id =
+         Client_order_id.For_testing.of_int !next_client_id
+       in
+       ignore
+         (Matching_engine.submit
+            engine
+            ~participant:alice
+            { client_order_id
+            ; symbol = aapl
+            ; side = Buy
+            ; price = Price.of_int_cents (deep_level_price - 1)
+            ; size = Size.of_int 100
+            ; time_in_force = Day
+            }
+          : Exchange_event.t list);
+       ignore
+         (Matching_engine.cancel engine alice client_order_id
+          : Exchange_event.t list))
 ;;
 
 (* ---------------------------------------------------------------- *)
@@ -467,8 +480,7 @@ let () =
              (List.concat
                 [ List.map deep_sizes ~f:(fun n ->
                     bench_best_bid_offer_deep ~n)
-                ; List.map deep_sizes ~f:(fun n ->
-                    bench_submit_rest_deep ~n)
+                ; List.map deep_sizes ~f:(fun n -> bench_submit_rest_deep ~n)
                 ]) )
        ])
 ;;
