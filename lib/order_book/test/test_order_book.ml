@@ -85,6 +85,26 @@ let%expect_test "count tracks orders on each side independently" =
   [%test_result: bool] (Order_book.is_empty book) ~expect:false
 ;;
 
+let%expect_test "count sums orders within a shared price level" =
+  (* Regression: with the book keyed by price, counting map entries
+     reports price levels, not orders. Three orders stacked on one level
+     must count as three. *)
+  let book = Order_book.create Harness.aapl_id in
+  Order_book.add
+    book
+    (make_order ~side:Sell ~price_cents:15100 ~order_id:1 ());
+  Order_book.add
+    book
+    (make_order ~side:Sell ~price_cents:15100 ~order_id:2 ());
+  Order_book.add
+    book
+    (make_order ~side:Sell ~price_cents:15100 ~order_id:3 ());
+  Order_book.add
+    book
+    (make_order ~side:Sell ~price_cents:15200 ~order_id:4 ());
+  [%test_result: int] (Order_book.count book Sell) ~expect:4
+;;
+
 (* --- orders_on_side --- *)
 
 let%expect_test "orders_on_side returns all orders on a side" =

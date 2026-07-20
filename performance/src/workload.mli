@@ -94,3 +94,9 @@ val next_action : t -> Action.t
 (** Report the events the engine returned for the last action, so the
     generator can drop filled or cancelled orders from its live resting set. *)
 val observe : t -> Exchange_event.t list -> unit
+
+(** How many resting orders the generator believes are live. In a correctly
+    closed loop this equals the engine's actual resting count; the replay
+    driver prints both so a divergence (a missed event kind in {!observe}) is
+    visible immediately. *)
+val num_live : t -> int

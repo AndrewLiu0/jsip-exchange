@@ -5,7 +5,7 @@ module Order_key = struct
   module T = struct
     type t = Participant.t * Client_order_id.t
     [@@deriving sexp, compare, hash]
-  end
+end
 
   include T
   include Comparable.Make (T)

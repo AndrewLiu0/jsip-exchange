@@ -18,12 +18,12 @@ module Config = struct
   let balanced =
     { num_symbols = 100
     ; num_participants = 100
-    ; cancel_fraction = 0.50
-    ; marketable_fraction = 0.50
+    ; cancel_fraction = 0.31
+    ; marketable_fraction = 0.1
     ; ioc_fraction = 0.50
     ; max_order_size = 500
     ; initial_price_cents = 15000
-    ; drift_cents = 30
+    ; drift_cents = 3
     ; resting_band_cents = 1000
     }
   ;;
@@ -44,6 +44,8 @@ end
 
 (* A resting order the generator believes is still on the book. [remaining]
    tracks unfilled size so partial fills don't retire the order early. *)
+
+   (* Wrap in module*)
 type live_order =
   { participant : Participant.t
   ; client_order_id : Client_order_id.t
@@ -243,3 +245,5 @@ let observe t events =
     | Order_reject _ | Cancel_reject _ -> ()
     | Best_bid_offer_update _ | Trade_report _ -> ())
 ;;
+
+let num_live t = Hashtbl.length t.live

@@ -111,7 +111,9 @@ let find_match t incoming : Order.t option =
 ;;
 
 let is_empty t = Map.is_empty t.bids && Map.is_empty t.asks
-let count t side = Map.length (side_map t side)
+let count t side =
+  Map.sum (module Int) (side_map t side) ~f:Order_queue.length
+;;
 
 let best_price t side =
   let best_order = find_best_order t side in
